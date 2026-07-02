@@ -111,10 +111,8 @@ const STR = {
 
     lyrics_title: 'Текст пісні',
     lyrics_loading: 'Шукаю текст пісні…',
-    lyrics_empty: 'Текст не знайшовся автоматично — спробуй знайти вручну: напиши виконавця і назву пісні.',
+    lyrics_empty: 'Текст цієї пісні не знайшовся у базі. Так буває у реміксів, попурі та рідкісних версій.',
     lyrics_close: 'Закрити текст',
-    lyrics_manual: 'Знайти',
-    lyrics_search_placeholder: 'Виконавець і назва пісні…',
 
     room_section: 'Спільна кімната',
     room_create: 'Створити кімнату',
@@ -260,10 +258,8 @@ const STR = {
 
     lyrics_title: 'Text písničky',
     lyrics_loading: 'Hledám text písničky…',
-    lyrics_empty: 'Text se nenašel automaticky — zkus ho najít ručně: napiš interpreta a název písničky.',
+    lyrics_empty: 'Text téhle písničky v databázi není. Stává se to u remixů, směsí a vzácných verzí.',
     lyrics_close: 'Zavřít text',
-    lyrics_manual: 'Najít',
-    lyrics_search_placeholder: 'Interpret a název písničky…',
 
     room_section: 'Sdílená místnost',
     room_create: 'Vytvořit místnost',

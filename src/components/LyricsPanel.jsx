@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Languages, Search, X } from 'lucide-react'
+import { Languages, X } from 'lucide-react'
 import { fetchLyrics, needsTransliteration, romanize } from '../lib/lyrics.js'
 import { useLang } from '../lib/i18n.jsx'
 
@@ -11,8 +11,6 @@ export default function LyricsPanel({ title, playerApiRef, onClose }) {
   const [lyrics, setLyrics] = useState(null)
   const [lineIndex, setLineIndex] = useState(-1)
   const [offset, setOffset] = useState(0)
-  const [manualQuery, setManualQuery] = useState(null)
-  const [searchOpen, setSearchOpen] = useState(false)
   const offsetRef = useRef(0)
   offsetRef.current = offset
 
@@ -33,7 +31,7 @@ export default function LyricsPanel({ title, playerApiRef, onClose }) {
     }
 
     waitForDuration()
-      .then((duration) => (cancelled ? null : fetchLyrics(title, duration, manualQuery)))
+      .then((duration) => (cancelled ? null : fetchLyrics(title, duration)))
       .then((found) => {
         if (cancelled) return
         setLyrics(found)
@@ -41,7 +39,7 @@ export default function LyricsPanel({ title, playerApiRef, onClose }) {
         setLineIndex(-1)
       })
     return () => { cancelled = true }
-  }, [title, manualQuery])
+  }, [title])
 
   // sledování času přehrávače pro časovaný text
   useEffect(() => {
@@ -72,23 +70,10 @@ export default function LyricsPanel({ title, playerApiRef, onClose }) {
             <button onClick={() => setOffset((o) => o + 2)} className="rounded-md bg-white/10 px-2 py-0.5 hover:bg-white/20">+2с</button>
           </>
         )}
-        <button
-          onClick={() => setSearchOpen(!searchOpen)}
-          aria-label={t('lyrics_manual')}
-          className={`rounded-md p-1 ${searchOpen ? 'bg-white/25' : 'bg-white/10 hover:bg-white/20'}`}
-        >
-          <Search size={13} strokeWidth={2} />
-        </button>
         <button onClick={onClose} aria-label={t('lyrics_close')} className="rounded-md bg-white/10 p-1 hover:bg-white/20">
           <X size={13} strokeWidth={2} />
         </button>
       </div>
-
-      {(searchOpen || state === 'empty') && (
-        <ManualSearch
-          onSearch={(q) => { setManualQuery(q); setSearchOpen(false) }}
-        />
-      )}
 
       {state === 'loading' && <p className="animate-pulse p-4 text-center text-sm text-white/60">{t('lyrics_loading')}</p>}
 
@@ -118,32 +103,6 @@ export default function LyricsPanel({ title, playerApiRef, onClose }) {
         </div>
       )}
     </div>
-  )
-}
-
-function ManualSearch({ onSearch }) {
-  const { t } = useLang()
-  const [value, setValue] = useState('')
-
-  function submit(event) {
-    event.preventDefault()
-    const text = value.trim()
-    if (text.length >= 3) onSearch(text)
-  }
-
-  return (
-    <form onSubmit={submit} className="flex gap-2 px-3 pt-2">
-      <input
-        type="search"
-        value={value}
-        onChange={(event) => setValue(event.target.value)}
-        placeholder={t('lyrics_search_placeholder')}
-        className="field min-w-0 flex-1 px-3 py-1.5 text-sm"
-      />
-      <button type="submit" className="btn-secondary shrink-0 px-3 py-1.5 text-sm text-neon-cyan">
-        {t('lyrics_manual')}
-      </button>
-    </form>
   )
 }
 
