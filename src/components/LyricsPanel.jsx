@@ -1,28 +1,47 @@
 import { useEffect, useRef, useState } from 'react'
-import { Languages, X } from 'lucide-react'
+import { Languages, Search, X } from 'lucide-react'
 import { fetchLyrics, needsTransliteration, romanize } from '../lib/lyrics.js'
 import { useLang } from '../lib/i18n.jsx'
 
 // Panel u spodního okraje: text písně, u cizího písma i přepis výslovnosti.
-// Časovaný text jede podle přehrávače; ± posun řeší jiná intra karaoke verzí.
+// Časovaný text jede podle přehrávače; ± posun řeší jiná intra verzí.
 export default function LyricsPanel({ title, playerApiRef, onClose }) {
   const { t } = useLang()
   const [state, setState] = useState('loading') // loading | ready | empty
   const [lyrics, setLyrics] = useState(null)
   const [lineIndex, setLineIndex] = useState(-1)
   const [offset, setOffset] = useState(0)
+  const [manualQuery, setManualQuery] = useState(null)
+  const [searchOpen, setSearchOpen] = useState(false)
   const offsetRef = useRef(0)
   offsetRef.current = offset
 
   useEffect(() => {
     let cancelled = false
-    fetchLyrics(title).then((found) => {
-      if (cancelled) return
-      setLyrics(found)
-      setState(found ? 'ready' : 'empty')
-    })
+    setState('loading')
+
+    // panel se otevírá už při odpočtu — na délku videa chvíli počkáme,
+    // bez ní nejde poznat správná verze písničky
+    async function waitForDuration() {
+      for (let i = 0; i < 15; i++) {
+        const duration = playerApiRef.current?.getDuration?.() ?? 0
+        if (duration > 0) return duration
+        await new Promise((resolve) => setTimeout(resolve, 400))
+        if (cancelled) return 0
+      }
+      return 0
+    }
+
+    waitForDuration()
+      .then((duration) => (cancelled ? null : fetchLyrics(title, duration, manualQuery)))
+      .then((found) => {
+        if (cancelled) return
+        setLyrics(found)
+        setState(found ? 'ready' : 'empty')
+        setLineIndex(-1)
+      })
     return () => { cancelled = true }
-  }, [title])
+  }, [title, manualQuery])
 
   // sledování času přehrávače pro časovaný text
   useEffect(() => {
@@ -53,15 +72,28 @@ export default function LyricsPanel({ title, playerApiRef, onClose }) {
             <button onClick={() => setOffset((o) => o + 2)} className="rounded-md bg-white/10 px-2 py-0.5 hover:bg-white/20">+2с</button>
           </>
         )}
+        <button
+          onClick={() => setSearchOpen(!searchOpen)}
+          aria-label={t('lyrics_manual')}
+          className={`rounded-md p-1 ${searchOpen ? 'bg-white/25' : 'bg-white/10 hover:bg-white/20'}`}
+        >
+          <Search size={13} strokeWidth={2} />
+        </button>
         <button onClick={onClose} aria-label={t('lyrics_close')} className="rounded-md bg-white/10 p-1 hover:bg-white/20">
           <X size={13} strokeWidth={2} />
         </button>
       </div>
 
+      {(searchOpen || state === 'empty') && (
+        <ManualSearch
+          onSearch={(q) => { setManualQuery(q); setSearchOpen(false) }}
+        />
+      )}
+
       {state === 'loading' && <p className="animate-pulse p-4 text-center text-sm text-white/60">{t('lyrics_loading')}</p>}
 
       {state === 'empty' && (
-        <p className="p-4 text-center text-sm text-white/60">
+        <p className="px-4 pb-4 text-center text-sm text-white/60">
           {t('lyrics_empty')}
         </p>
       )}
@@ -86,6 +118,32 @@ export default function LyricsPanel({ title, playerApiRef, onClose }) {
         </div>
       )}
     </div>
+  )
+}
+
+function ManualSearch({ onSearch }) {
+  const { t } = useLang()
+  const [value, setValue] = useState('')
+
+  function submit(event) {
+    event.preventDefault()
+    const text = value.trim()
+    if (text.length >= 3) onSearch(text)
+  }
+
+  return (
+    <form onSubmit={submit} className="flex gap-2 px-3 pt-2">
+      <input
+        type="search"
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
+        placeholder={t('lyrics_search_placeholder')}
+        className="field min-w-0 flex-1 px-3 py-1.5 text-sm"
+      />
+      <button type="submit" className="btn-secondary shrink-0 px-3 py-1.5 text-sm text-neon-cyan">
+        {t('lyrics_manual')}
+      </button>
+    </form>
   )
 }
 
