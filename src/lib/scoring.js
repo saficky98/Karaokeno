@@ -77,14 +77,3 @@ export class ScoreEngine {
     }
   }
 }
-
-// Vtipný komentář podle pásma skóre (laskavý, ne urážlivý).
-export function scoreComment(score) {
-  if (score >= 9000) return 'ЛЕГЕНДА! Мікрофон плаче від щастя 🎤👑'
-  if (score >= 7500) return 'Зірка вечірки! Хтось викликав продюсера? 🌟'
-  if (score >= 6000) return 'Вогонь! Сусіди вже підспівують 🔥'
-  if (score >= 4000) return 'Солідно! Душа співала — і це було чутно 💪'
-  if (score >= 2000) return 'Розігрів зараховано! Далі буде тільки краще 😎'
-  if (score >= 500) return 'Головне — сміливість! Наступна пісня твоя 🙌'
-  return 'Тихенько, але з душею! Мікрофон тебе майже почув 😅'
-}

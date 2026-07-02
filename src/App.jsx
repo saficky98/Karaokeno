@@ -7,17 +7,19 @@ import PlayScreen from './screens/PlayScreen.jsx'
 import ResultsScreen from './screens/ResultsScreen.jsx'
 import { loadState, saveState, clearState } from './lib/storage.js'
 import { absorbKeyFromUrl } from './lib/youtubeApi.js'
+import { LangProvider, translate } from './lib/i18n.jsx'
 
 // Aktivační odkaz #k=… zpracujeme hned při startu, ať klíč nezůstane v adrese.
 absorbKeyFromUrl()
 
 const SCREENS = [
-  { id: 'home', label: 'Головна', Icon: MicVocal },
-  { id: 'players', label: 'Гравці', Icon: Users },
-  { id: 'search', label: 'Пошук', Icon: Search },
-  { id: 'play', label: 'Співаємо', Icon: Play },
-  { id: 'results', label: 'Результати', Icon: Trophy },
+  { id: 'home', labelKey: 'nav_home', Icon: MicVocal },
+  { id: 'players', labelKey: 'nav_players', Icon: Users },
+  { id: 'search', labelKey: 'nav_search', Icon: Search },
+  { id: 'play', labelKey: 'nav_play', Icon: Play },
+  { id: 'results', labelKey: 'nav_results', Icon: Trophy },
 ]
+
 
 const saved = loadState()
 
@@ -49,10 +51,15 @@ export default function App() {
   const [nowPlaying, setNowPlaying] = useState(null)
   const [results, setResults] = useState(saved?.results ?? [])
   const [micConsent, setMicConsent] = useState(saved?.micConsent ?? null)
+  const [lang, setLang] = useState(saved?.lang ?? 'uk')
 
   useEffect(() => {
-    saveState({ players, queue, nowPlaying, results, micConsent })
-  }, [players, queue, nowPlaying, results, micConsent])
+    saveState({ players, queue, nowPlaying, results, micConsent, lang })
+  }, [players, queue, nowPlaying, results, micConsent, lang])
+
+  useEffect(() => {
+    document.documentElement.lang = lang === 'cs' ? 'cs' : 'uk'
+  }, [lang])
 
   // Průběžný žebříček: součet bodů podle hráče, seřazený sestupně.
   const leaderboard = players
@@ -179,8 +186,9 @@ export default function App() {
     item ? { ...item, singer: players.find((p) => p.id === item.singerId) ?? null } : null
 
   return (
+    <LangProvider lang={lang} setLang={setLang}>
     <div className="party-bg flex h-full flex-col">
-      <main key={screen} className="min-h-0 flex-1 animate-screen-in">
+      <main key={`${screen}-${lang}`} className="min-h-0 flex-1 animate-screen-in">
         {screen === 'home' && (
           <HomeScreen
             players={players}
@@ -236,7 +244,7 @@ export default function App() {
       </main>
 
       <nav className="flex shrink-0 justify-around gap-1 border-t border-line bg-panel/85 px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur-md">
-        {SCREENS.map(({ id, label, Icon }) => {
+        {SCREENS.map(({ id, labelKey, Icon }) => {
           const active = screen === id
           return (
             <button
@@ -252,11 +260,12 @@ export default function App() {
                 className={active ? 'text-neon-pink' : ''}
                 aria-hidden="true"
               />
-              <span className="truncate">{label}</span>
+              <span className="truncate">{translate(lang, labelKey)}</span>
             </button>
           )
         })}
       </nav>
     </div>
+    </LangProvider>
   )
 }

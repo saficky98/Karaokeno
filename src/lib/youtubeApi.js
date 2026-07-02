@@ -59,16 +59,17 @@ async function callApi(url) {
   return response.json()
 }
 
-// Vyhledá karaoke verze. Vrací [{videoId, title, channel, duration, thumb}].
+// Vyhledá písničky. V režimu karaoke automaticky přidá slovo „karaoke",
+// v režimu originál hledá běžné klipy (text pak zobrazí appka sama).
+// Vrací [{videoId, title, channel, duration, thumb}].
 // Chyby: {type: 'nokey' | 'quota' | 'key' | 'network'}
-export async function searchKaraoke(query) {
+export async function searchKaraoke(query, { karaoke = false } = {}) {
   const key = getApiKey()
   if (!key) throw { type: 'nokey' }
 
-  // K dotazu automaticky přidáme „karaoke", pokud tam už není.
   const hasKaraoke = /караоке|karaoke/i.test(query)
   const suffix = /[Ѐ-ӿ]/.test(query) ? 'караоке' : 'karaoke'
-  const fullQuery = hasKaraoke ? query : `${query} ${suffix}`
+  const fullQuery = karaoke && !hasKaraoke ? `${query} ${suffix}` : query
 
   const searchUrl =
     'https://www.googleapis.com/youtube/v3/search' +

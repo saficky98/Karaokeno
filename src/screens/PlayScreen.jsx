@@ -1,12 +1,13 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import confetti from 'canvas-confetti'
-import { Clapperboard, Languages, Mic, SkipForward, VideoOff, X } from 'lucide-react'
+import { Clapperboard, Languages, Mic, SkipForward, VideoOff, Volume2, X } from 'lucide-react'
 import YouTubePlayer from '../components/YouTubePlayer.jsx'
 import VideoLinkForm from '../components/VideoLinkForm.jsx'
 import LiveScoreHUD from '../components/LiveScoreHUD.jsx'
 import Avatar from '../components/Avatar.jsx'
 import { requestMic, hasMic, startAnalysis } from '../lib/mic.js'
-import { ScoreEngine, scoreComment } from '../lib/scoring.js'
+import { ScoreEngine } from '../lib/scoring.js'
+import { useLang, commentKey } from '../lib/i18n.jsx'
 
 // Panel s textem (a knihovna přepisu písma) se stahuje až při prvním otevření.
 const LyricsPanel = lazy(() => import('../components/LyricsPanel.jsx'))
@@ -71,14 +72,16 @@ export default function PlayScreen({
   onSongFinished,
   leaderboard,
 }) {
+  const { t } = useLang()
   const [playerError, setPlayerError] = useState(null)
   const [loading, setLoading] = useState(true)
   const [result, setResult] = useState(null) // {score, comment} po dozpívání
   const [ended, setEnded] = useState(false)
   const [live, setLive] = useState(null) // {score, level, singing}
   const [micFailed, setMicFailed] = useState(false)
+  const [needsUnmute, setNeedsUnmute] = useState(false)
   const [counting, setCounting] = useState(true)
-  const [showLyrics, setShowLyrics] = useState(false)
+  const [showLyrics, setShowLyrics] = useState(true)
 
   const engineRef = useRef(null)
   const stopRef = useRef(null)
@@ -115,7 +118,7 @@ export default function PlayScreen({
           <Clapperboard size={24} strokeWidth={1.8} />
         </span>
         <p className="max-w-md text-center text-sm text-white/55">
-          Поки нічого не грає. Додай пісні до черги на головній — або просто встав посилання:
+          {t('nothing_playing')}
         </p>
         <div className="w-full max-w-xl">
           <VideoLinkForm onPlayVideo={onPlayDirect} />
@@ -131,11 +134,9 @@ export default function PlayScreen({
         <span className="flex h-16 w-16 items-center justify-center rounded-full bg-neon-pink/10 text-neon-pink">
           <Mic size={28} strokeWidth={1.8} />
         </span>
-        <h2 className="font-display text-2xl font-bold">Дозволиш мікрофон?</h2>
+        <h2 className="font-display text-2xl font-bold">{t('mic_q')}</h2>
         <p className="max-w-md text-sm leading-relaxed text-white/65">
-          Ми слухатимемо спів і рахуватимемо веселі бали: скільки співаєш, як тримаєш ноту і скільки
-          в тебе енергії. Звук <b className="text-white/90">нікуди не записується і не надсилається</b> —
-          все рахується прямо на цьому пристрої.
+          {t('mic_explain_1')}<b className="text-white/90">{t('mic_explain_bold')}</b>{t('mic_explain_2')}
         </p>
         <div className="flex flex-col gap-2 sm:flex-row">
           <button
@@ -150,10 +151,10 @@ export default function PlayScreen({
             }}
             className="btn-primary px-8 py-4 font-display text-base"
           >
-            Дозволити і співати
+            {t('allow_sing')}
           </button>
           <button onClick={() => onMicConsent('off')} className="btn-secondary px-8 py-4">
-            Без балів
+            {t('no_scores')}
           </button>
         </div>
       </div>
@@ -188,7 +189,7 @@ export default function PlayScreen({
     let outcome = null
     if (engineRef.current) {
       const final = engineRef.current.finish()
-      outcome = { score: final.score, comment: scoreComment(final.score) }
+      outcome = { score: final.score }
       engineRef.current = null
       onSongFinished?.({ score: final.score, singerId: singer?.id ?? null, title })
     }
@@ -203,8 +204,27 @@ export default function PlayScreen({
     setLoading(true)
     setPlayerError(null)
     setCounting(true)
-    setShowLyrics(false)
+    setShowLyrics(true)
+    setNeedsUnmute(false)
     onNext()
+  }
+
+  // Po odpočtu se video musí rozjet samo. Když prohlížeč (hlavně mobil)
+  // zablokuje automatické přehrávání se zvukem, pustíme ho ztlumené
+  // a ukážeme jedno tlačítko „Zapnout zvuk".
+  function ensurePlaying() {
+    const player = playerApiRef.current
+    if (!player?.getPlayerState) return
+    player.playVideo?.()
+    setTimeout(() => {
+      const state = player.getPlayerState?.()
+      // 1 = hraje, 3 = bufferuje — jinak je autoplay zablokovaný
+      if (state !== 1 && state !== 3) {
+        player.mute?.()
+        player.playVideo?.()
+        setNeedsUnmute(true)
+      }
+    }, 800)
   }
 
   return (
@@ -215,6 +235,7 @@ export default function PlayScreen({
         onReady={(playerApi) => {
           playerApiRef.current = playerApi
           setLoading(false)
+          playerApi.playVideo?.()
           startScoring()
         }}
         onEnded={finishSong}
@@ -223,11 +244,22 @@ export default function PlayScreen({
 
       {loading && playerError === null && !ended && !counting && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <p className="animate-pulse text-white/70">Завантажую відео…</p>
+          <p className="animate-pulse text-white/70">{t('loading_video')}</p>
         </div>
       )}
 
-      {counting && playerError === null && !ended && <Countdown onDone={() => setCounting(false)} />}
+      {counting && playerError === null && !ended && (
+        <Countdown onDone={() => { setCounting(false); ensurePlaying() }} />
+      )}
+
+      {needsUnmute && !ended && playerError === null && !counting && (
+        <button
+          onClick={() => { playerApiRef.current?.unMute?.(); setNeedsUnmute(false) }}
+          className="btn-primary absolute bottom-16 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2"
+        >
+          <Volume2 size={18} strokeWidth={2} /> {t('unmute')}
+        </button>
+      )}
 
       {showLyrics && !ended && playerError === null && (
         <Suspense fallback={null}>
@@ -240,7 +272,7 @@ export default function PlayScreen({
           onClick={() => setShowLyrics(true)}
           className="absolute right-3 bottom-3 flex items-center gap-1.5 rounded-full border border-line bg-black/60 px-4 py-2 text-sm text-white/85 backdrop-blur transition hover:bg-black/80"
         >
-          <Languages size={15} strokeWidth={1.8} /> Текст
+          <Languages size={15} strokeWidth={1.8} /> {t('lyrics_btn')}
         </button>
       )}
 
@@ -266,13 +298,11 @@ export default function PlayScreen({
             <VideoOff size={24} strokeWidth={1.8} />
           </span>
           <p className="max-w-md text-sm text-white/70">
-            {playerError === 101 || playerError === 150
-              ? 'Це відео не можна відтворити поза YouTube (власник заборонив вбудовування). Спробуй інше караоке-відео.'
-              : 'Не вдалося відтворити відео. Перевір посилання і спробуй ще раз.'}
+            {playerError === 101 || playerError === 150 ? t('err_embed') : t('err_video')}
           </p>
           {nextItem ? (
             <button onClick={goNext} className="btn-primary flex items-center gap-2">
-              <SkipForward size={17} strokeWidth={2} /> Наступна пісня
+              <SkipForward size={17} strokeWidth={2} /> {t('next_song')}
             </button>
           ) : (
             <div className="w-full max-w-xl">
@@ -293,13 +323,13 @@ export default function PlayScreen({
                 </div>
               )}
               <CountUpScore value={result.score} />
-              <p className="max-w-md text-white/75">{result.comment}</p>
+              <p className="max-w-md text-white/75">{t(commentKey(result.score))}</p>
             </div>
           )}
 
           {leaderboard?.length > 0 && (
             <div className="card w-full max-w-sm p-4 text-left">
-              <p className="section-label mb-2.5">Рейтинг вечірки</p>
+              <p className="section-label mb-2.5">{t('party_rating')}</p>
               <ol className="flex flex-col gap-2">
                 {leaderboard.slice(0, 3).map((entry, index) => (
                   <li key={entry.player.id} className="flex items-center gap-2.5">
@@ -318,27 +348,27 @@ export default function PlayScreen({
               <div className="flex items-center gap-3">
                 {nextItem.singer && <Avatar player={nextItem.singer} size="lg" />}
                 <div className="text-left">
-                  <p className="section-label">Далі співає</p>
+                  <p className="section-label">{t('next_sings')}</p>
                   {nextItem.singer && (
                     <p className="font-display text-xl font-bold" style={{ color: nextItem.singer.color }}>
                       {nextItem.singer.name}
                     </p>
                   )}
-                  <p className="max-w-60 truncate text-sm text-white/60">{nextItem.title || 'Наступна пісня з черги'}</p>
+                  <p className="max-w-60 truncate text-sm text-white/60">{nextItem.title || t('next_from_queue')}</p>
                 </div>
               </div>
               <button onClick={goNext} className="btn-primary flex items-center gap-2.5 px-8 py-4 font-display text-base">
-                <Mic size={19} strokeWidth={2} /> Вдуй!
+                <Mic size={19} strokeWidth={2} /> {t('vdui_btn')}
               </button>
             </>
           ) : (
             <>
-              <p className="max-w-md text-sm text-white/70">Черга порожня. Додай ще пісень — вечірка тільки починається!</p>
+              <p className="max-w-md text-sm text-white/70">{t('queue_done')}</p>
               <button
                 onClick={() => { setEnded(false); setResult(null); onExit(); onGoHome() }}
                 className="btn-primary"
               >
-                На головну
+                {t('go_home')}
               </button>
             </>
           )}
@@ -350,7 +380,7 @@ export default function PlayScreen({
           onClick={onExit}
           className="absolute top-3 right-3 flex items-center gap-1.5 rounded-full border border-line bg-black/60 px-4 py-2 text-sm text-white/85 backdrop-blur transition hover:bg-black/80"
         >
-          <X size={15} strokeWidth={2} /> Вийти
+          <X size={15} strokeWidth={2} /> {t('exit')}
         </button>
       )}
     </div>

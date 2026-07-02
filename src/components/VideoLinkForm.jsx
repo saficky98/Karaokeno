@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { Play } from 'lucide-react'
 import { parseYouTubeId } from '../lib/youtube.js'
+import { useLang } from '../lib/i18n.jsx'
 
 export default function VideoLinkForm({ onPlayVideo, autoFocus = false }) {
+  const { t } = useLang()
   const [link, setLink] = useState('')
   const [error, setError] = useState(null)
 
@@ -10,7 +12,7 @@ export default function VideoLinkForm({ onPlayVideo, autoFocus = false }) {
     event.preventDefault()
     const id = parseYouTubeId(link)
     if (!id) {
-      setError('Це не схоже на посилання YouTube. Скопіюй повну адресу відео, наприклад https://www.youtube.com/watch?v=…')
+      setError(t('err_link'))
       return
     }
     setError(null)
@@ -31,7 +33,7 @@ export default function VideoLinkForm({ onPlayVideo, autoFocus = false }) {
           className="field flex-1 text-base"
         />
         <button type="submit" className="btn-primary flex items-center justify-center gap-2">
-          <Play size={16} strokeWidth={2.2} fill="currentColor" /> Грати
+          <Play size={16} strokeWidth={2.2} fill="currentColor" /> {t('play_btn')}
         </button>
       </div>
       {error && <p className="text-sm text-red-400">{error}</p>}

@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { Languages, X } from 'lucide-react'
 import { fetchLyrics, needsTransliteration, romanize } from '../lib/lyrics.js'
+import { useLang } from '../lib/i18n.jsx'
 
 // Panel u spodního okraje: text písně, u cizího písma i přepis výslovnosti.
 // Časovaný text jede podle přehrávače; ± posun řeší jiná intra karaoke verzí.
 export default function LyricsPanel({ title, playerApiRef, onClose }) {
+  const { t } = useLang()
   const [state, setState] = useState('loading') // loading | ready | empty
   const [lyrics, setLyrics] = useState(null)
   const [lineIndex, setLineIndex] = useState(-1)
@@ -42,7 +44,7 @@ export default function LyricsPanel({ title, playerApiRef, onClose }) {
       <div className="flex items-center gap-2 px-3 pt-2 text-xs text-white/50">
         <span className="flex min-w-0 flex-1 items-center gap-1.5 truncate">
           <Languages size={13} strokeWidth={1.8} className="shrink-0" />
-          {state === 'ready' ? lyrics.match : 'Текст пісні'}
+          {state === 'ready' ? lyrics.match : t('lyrics_title')}
         </span>
         {lyrics?.synced && (
           <>
@@ -51,16 +53,16 @@ export default function LyricsPanel({ title, playerApiRef, onClose }) {
             <button onClick={() => setOffset((o) => o + 2)} className="rounded-md bg-white/10 px-2 py-0.5 hover:bg-white/20">+2с</button>
           </>
         )}
-        <button onClick={onClose} aria-label="Закрити текст" className="rounded-md bg-white/10 p-1 hover:bg-white/20">
+        <button onClick={onClose} aria-label={t('lyrics_close')} className="rounded-md bg-white/10 p-1 hover:bg-white/20">
           <X size={13} strokeWidth={2} />
         </button>
       </div>
 
-      {state === 'loading' && <p className="animate-pulse p-4 text-center text-sm text-white/60">Шукаю текст пісні…</p>}
+      {state === 'loading' && <p className="animate-pulse p-4 text-center text-sm text-white/60">{t('lyrics_loading')}</p>}
 
       {state === 'empty' && (
         <p className="p-4 text-center text-sm text-white/60">
-          Текст не знайшовся (шукаємо за назвою відео — вона буває неточна).
+          {t('lyrics_empty')}
         </p>
       )}
 
