@@ -9,7 +9,7 @@ export default function VideoLinkForm({ onPlayVideo, autoFocus = false }) {
     event.preventDefault()
     const id = parseYouTubeId(link)
     if (!id) {
-      setError('Tohle nevypadá jako YouTube odkaz. Zkopíruj celou adresu videa, např. https://www.youtube.com/watch?v=…')
+      setError('Це не схоже на посилання YouTube. Скопіюй повну адресу відео, наприклад https://www.youtube.com/watch?v=…')
       return
     }
     setError(null)
@@ -33,7 +33,7 @@ export default function VideoLinkForm({ onPlayVideo, autoFocus = false }) {
           type="submit"
           className="rounded-xl bg-neon-pink px-6 py-3 font-bold text-white transition hover:brightness-110 active:scale-95"
         >
-          Přehrát
+          Грати
         </button>
       </div>
       {error && <p className="text-sm text-red-400">{error}</p>}
