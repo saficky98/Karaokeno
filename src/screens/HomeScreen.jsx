@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { parseYouTubeId } from '../lib/youtube.js'
 import VideoLinkForm from '../components/VideoLinkForm.jsx'
+import { KeyInput } from '../components/SongPicker.jsx'
+import { getApiKey } from '../lib/youtubeApi.js'
 
 export default function HomeScreen({
   players,
@@ -13,7 +15,9 @@ export default function HomeScreen({
   onPlayDirect,
   onClearQueue,
   onResetGame,
+  onEnqueueAllPlayerSongs,
 }) {
+  const songbookCount = players.reduce((sum, p) => sum + (p.songs?.length ?? 0), 0)
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto flex max-w-xl flex-col gap-6 p-6">
@@ -49,6 +53,14 @@ export default function HomeScreen({
               onRemoveSong={onRemoveSong}
               onMoveSong={onMoveSong}
             />
+            {songbookCount > 0 && (
+              <button
+                onClick={onEnqueueAllPlayerSongs}
+                className="rounded-xl border border-neon-cyan/40 px-4 py-3 font-bold text-neon-cyan transition hover:bg-neon-cyan/10 active:scale-95"
+              >
+                🎵 Висипати пісні гравців у чергу ({songbookCount})
+              </button>
+            )}
             {queue.length > 0 && (
               <button
                 onClick={onStart}
@@ -102,6 +114,7 @@ function Settings({ hasPlayers, hasQueue, onGoToPlayers, onClearQueue, onResetGa
           >
             🗑 Очистити чергу
           </button>
+          <KeyStatus />
           {confirmReset ? (
             <div className="flex flex-col gap-2 rounded-xl border border-red-400/40 p-3">
               <p className="text-sm text-white/80">Точно скинути все? Гравці та черга зникнуть.</p>
@@ -253,6 +266,25 @@ function QueueList({ queue, players, onRemoveSong, onMoveSong }) {
         )
       })}
     </ol>
+  )
+}
+
+function KeyStatus() {
+  const [hasKey, setHasKey] = useState(Boolean(getApiKey()))
+  const [editing, setEditing] = useState(false)
+
+  return (
+    <div className="rounded-xl border border-white/15 px-4 py-3 text-sm">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-white/80">
+          🔑 Пошук YouTube: {hasKey ? <span className="text-neon-lime">активовано ✓</span> : <span className="text-white/50">не активовано</span>}
+        </span>
+        <button onClick={() => setEditing(!editing)} className="text-white/50 underline-offset-2 hover:underline">
+          {hasKey ? 'змінити ключ' : 'ввести ключ'}
+        </button>
+      </div>
+      {editing && <KeyInput onSaved={() => { setHasKey(true); setEditing(false) }} />}
+    </div>
   )
 }
 

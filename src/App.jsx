@@ -5,6 +5,10 @@ import SearchScreen from './screens/SearchScreen.jsx'
 import PlayScreen from './screens/PlayScreen.jsx'
 import ResultsScreen from './screens/ResultsScreen.jsx'
 import { loadState, saveState, clearState } from './lib/storage.js'
+import { absorbKeyFromUrl } from './lib/youtubeApi.js'
+
+// Aktivační odkaz #k=… zpracujeme hned při startu, ať klíč nezůstane v adrese.
+absorbKeyFromUrl()
 
 const SCREENS = [
   { id: 'home', label: 'Головна', icon: '🎤' },
@@ -16,9 +20,15 @@ const SCREENS = [
 
 const saved = loadState()
 
+// Starší uložené hry nemají osobní playlisty — doplníme prázdné.
+const savedPlayers = (saved?.players ?? []).map((p) => ({ ...p, songs: p.songs ?? [] }))
+
 // Čítač ID navazuje za nejvyšší uložené ID, aby po obnovení stránky nevznikaly duplicity.
 let nextId =
-  Math.max(0, ...[...(saved?.players ?? []), ...(saved?.queue ?? [])].map((item) => item.id)) + 1
+  Math.max(
+    0,
+    ...[...savedPlayers, ...(saved?.queue ?? []), ...savedPlayers.flatMap((p) => p.songs)].map((item) => item.id),
+  ) + 1
 
 // Písnička rozehraná před obnovením stránky se vrátí na začátek fronty.
 const initialQueue = saved?.nowPlaying
@@ -27,7 +37,7 @@ const initialQueue = saved?.nowPlaying
 
 export default function App() {
   const [screen, setScreen] = useState('home')
-  const [players, setPlayers] = useState(saved?.players ?? [])
+  const [players, setPlayers] = useState(savedPlayers)
   const [queue, setQueue] = useState(initialQueue)
   // Співається саме зараз: { videoId, title, singerId } або null.
   const [nowPlaying, setNowPlaying] = useState(null)
@@ -37,7 +47,48 @@ export default function App() {
   }, [players, queue, nowPlaying])
 
   function addPlayer(name, avatar, color) {
-    setPlayers((list) => [...list, { id: nextId++, name, avatar, color }])
+    setPlayers((list) => [...list, { id: nextId++, name, avatar, color, songs: [] }])
+  }
+
+  function addPlayerSong(playerId, videoId, title) {
+    setPlayers((list) =>
+      list.map((p) => (p.id === playerId ? { ...p, songs: [...p.songs, { id: nextId++, videoId, title }] } : p)),
+    )
+  }
+
+  function removePlayerSong(playerId, songId) {
+    setPlayers((list) =>
+      list.map((p) => (p.id === playerId ? { ...p, songs: p.songs.filter((s) => s.id !== songId) } : p)),
+    )
+  }
+
+  // Přesune jednu písničku z osobního playlistu do společné fronty.
+  function enqueuePlayerSong(playerId, songId) {
+    const player = players.find((p) => p.id === playerId)
+    const song = player?.songs.find((s) => s.id === songId)
+    if (!song) return
+    removePlayerSong(playerId, songId)
+    addSong(song.videoId, song.title, playerId)
+  }
+
+  // Naskládá osobní playlisty všech hráčů do fronty — férově se střídají.
+  function enqueueAllPlayerSongs() {
+    const additions = []
+    const remaining = players.map((p) => ({ ...p, songs: [...p.songs] }))
+    let took = true
+    while (took) {
+      took = false
+      for (const p of remaining) {
+        const song = p.songs.shift()
+        if (song) {
+          additions.push({ id: song.id, videoId: song.videoId, title: song.title, singerId: p.id })
+          took = true
+        }
+      }
+    }
+    if (additions.length === 0) return
+    setPlayers(remaining)
+    setQueue((q) => [...q, ...additions])
   }
 
   function removePlayer(id) {
@@ -66,15 +117,14 @@ export default function App() {
 
   // Бере першу пісню з черги і запускає її.
   function playNext() {
-    setQueue((list) => {
-      const [next, ...rest] = list
-      if (!next) {
-        setNowPlaying(null)
-        return list
-      }
-      setNowPlaying({ videoId: next.videoId, title: next.title, singerId: next.singerId })
-      return rest
-    })
+    const [next, ...rest] = queue
+    if (!next) {
+      setNowPlaying(null)
+      setScreen('play')
+      return
+    }
+    setNowPlaying({ videoId: next.videoId, title: next.title, singerId: next.singerId })
+    setQueue(rest)
     setScreen('play')
   }
 
@@ -119,12 +169,27 @@ export default function App() {
             onPlayDirect={playDirect}
             onClearQueue={clearQueue}
             onResetGame={resetGame}
+            onEnqueueAllPlayerSongs={enqueueAllPlayerSongs}
           />
         )}
         {screen === 'players' && (
-          <PlayersScreen players={players} onAddPlayer={addPlayer} onRemovePlayer={removePlayer} />
+          <PlayersScreen
+            players={players}
+            onAddPlayer={addPlayer}
+            onRemovePlayer={removePlayer}
+            onAddPlayerSong={addPlayerSong}
+            onRemovePlayerSong={removePlayerSong}
+            onEnqueuePlayerSong={enqueuePlayerSong}
+          />
         )}
-        {screen === 'search' && <SearchScreen />}
+        {screen === 'search' && (
+          <SearchScreen
+            players={players}
+            queueLength={queue.length}
+            onAddSong={addSong}
+            onGoToPlayers={() => setScreen('players')}
+          />
+        )}
         {screen === 'play' && (
           <PlayScreen
             nowPlaying={withSinger(nowPlaying)}
