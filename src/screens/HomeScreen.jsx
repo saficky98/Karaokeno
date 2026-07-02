@@ -62,14 +62,6 @@ export default function HomeScreen({
           <p className="mt-2.5 text-sm tracking-wide text-white/50">{t('tagline')}</p>
         </header>
 
-        <RoomPanel
-          room={room}
-          roomStatus={roomStatus}
-          guestCount={guestCount}
-          onCreateRoom={onCreateRoom}
-          onCloseRoom={onCloseRoom}
-        />
-
         {players.length < 2 ? (
           <div className="card flex flex-col items-center gap-4 p-8 text-center">
             <span className="flex h-14 w-14 items-center justify-center rounded-full bg-neon-cyan/10 text-neon-cyan">
@@ -117,6 +109,11 @@ export default function HomeScreen({
           onResetGame={onResetGame}
           micConsent={micConsent}
           onResetMicConsent={onResetMicConsent}
+          room={room}
+          roomStatus={roomStatus}
+          guestCount={guestCount}
+          onCreateRoom={onCreateRoom}
+          onCloseRoom={onCloseRoom}
         />
       </div>
     </div>
@@ -130,7 +127,7 @@ function RoomPanel({ room, roomStatus, guestCount, onCreateRoom, onCloseRoom }) 
 
   if (!room) {
     return (
-      <div className="card flex flex-col gap-3 p-5">
+      <div className="flex flex-col gap-3 rounded-xl border border-line p-4">
         <p className="section-label flex items-center gap-1.5">
           <Radio size={13} strokeWidth={1.8} /> {t('room_section')}
         </p>
@@ -157,7 +154,7 @@ function RoomPanel({ room, roomStatus, guestCount, onCreateRoom, onCloseRoom }) 
   }
 
   return (
-    <div className="card flex flex-col gap-3 p-5">
+    <div className="flex flex-col gap-3 rounded-xl border border-line p-4">
       <div className="flex items-center justify-between gap-2">
         <p className="section-label flex items-center gap-1.5">
           <Radio size={13} strokeWidth={1.8} /> {t('room_section')}
@@ -374,7 +371,7 @@ function QuickPlay({ onPlayDirect }) {
   )
 }
 
-function Settings({ hasPlayers, hasQueue, onGoToPlayers, onClearQueue, onResetGame, micConsent, onResetMicConsent }) {
+function Settings({ hasPlayers, hasQueue, onGoToPlayers, onClearQueue, onResetGame, micConsent, onResetMicConsent, room, roomStatus, guestCount, onCreateRoom, onCloseRoom }) {
   const { t, lang, setLang } = useLang()
   const [open, setOpen] = useState(false)
   const [confirmReset, setConfirmReset] = useState(false)
@@ -389,6 +386,13 @@ function Settings({ hasPlayers, hasQueue, onGoToPlayers, onClearQueue, onResetGa
       </button>
       {open && (
         <div className="card flex flex-col gap-2 p-4">
+          <RoomPanel
+            room={room}
+            roomStatus={roomStatus}
+            guestCount={guestCount}
+            onCreateRoom={onCreateRoom}
+            onCloseRoom={onCloseRoom}
+          />
           <div className="flex items-center justify-between gap-2 rounded-xl border border-line px-4 py-3 text-sm">
             <span className="flex items-center gap-2 text-white/75">
               <Globe size={15} strokeWidth={1.8} className="text-white/40" />
