@@ -1,11 +1,51 @@
+@import "@fontsource/unbounded/700.css";
+@import "@fontsource/unbounded/900.css";
+@import "@fontsource/rubik/400.css";
+@import "@fontsource/rubik/500.css";
+@import "@fontsource/rubik/700.css";
 @import "tailwindcss";
 
 @theme {
-  --color-night: #0a0a14;
-  --color-panel: #14142a;
+  --font-display: "Unbounded", system-ui, sans-serif;
+  --font-sans: "Rubik", system-ui, sans-serif;
+
+  --color-night: #08060f;
+  --color-panel: #16122b;
+  --color-panel-2: #1d1838;
   --color-neon-pink: #ff2d92;
   --color-neon-cyan: #22d3ee;
   --color-neon-lime: #a3e635;
+  --color-neon-violet: #a78bfa;
+
+  --shadow-glow-pink: 0 0 24px rgba(255, 45, 146, 0.45);
+  --shadow-glow-cyan: 0 0 24px rgba(34, 211, 238, 0.35);
+
+  --animate-screen-in: screen-in 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-pop-in: pop-in 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  --animate-count-zoom: count-zoom 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-float: float 6s ease-in-out infinite;
+}
+
+@keyframes screen-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes pop-in {
+  from { opacity: 0; transform: scale(0.7); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes count-zoom {
+  0% { opacity: 0; transform: scale(0.3); }
+  25% { opacity: 1; transform: scale(1.15); }
+  55% { transform: scale(1); opacity: 1; }
+  100% { opacity: 0; transform: scale(1.6); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
 }
 
 html,
@@ -15,7 +55,21 @@ body,
 }
 
 body {
+  font-family: var(--font-sans);
   background-color: var(--color-night);
   color: #f4f4f8;
   -webkit-font-smoothing: antialiased;
+}
+
+/* Jemné neonové „párty" pozadí — dvě barevné mlhoviny, žádný pohyb do videa */
+.party-bg {
+  background:
+    radial-gradient(ellipse 70% 45% at 15% -5%, rgba(255, 45, 146, 0.16), transparent 60%),
+    radial-gradient(ellipse 65% 40% at 90% 0%, rgba(34, 211, 238, 0.13), transparent 60%),
+    radial-gradient(ellipse 80% 55% at 50% 115%, rgba(167, 139, 250, 0.12), transparent 65%),
+    var(--color-night);
+}
+
+.font-display {
+  font-family: var(--font-display);
 }

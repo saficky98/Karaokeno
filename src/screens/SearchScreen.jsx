@@ -34,7 +34,7 @@ export default function SearchScreen({ players, queueLength, onAddSong, onGoToPl
     <div className="h-full overflow-y-auto">
       <div className="mx-auto flex max-w-xl flex-col gap-4 p-6">
         <div>
-          <h2 className="text-3xl font-black">Пошук</h2>
+          <h2 className="font-display text-3xl font-black">Пошук</h2>
           <p className="mt-1 text-white/60">Напиши назву — «караоке» додамо самі 😉</p>
         </div>
 
