@@ -11,6 +11,8 @@ export default function HomeScreen({
   onStart,
   onGoToPlayers,
   onPlayDirect,
+  onClearQueue,
+  onResetGame,
 }) {
   return (
     <div className="h-full overflow-y-auto">
@@ -18,7 +20,7 @@ export default function HomeScreen({
         <div className="text-center">
           <h1 className="text-5xl font-black tracking-tight sm:text-6xl">
             <span className="bg-gradient-to-r from-neon-pink to-neon-cyan bg-clip-text text-transparent">
-              Вдуй!
+              Vdui
             </span>
           </h1>
           <p className="mt-2 text-white/70">Караоке-вечірка: співай під YouTube і збирай бали 🎶</p>
@@ -59,7 +61,75 @@ export default function HomeScreen({
         )}
 
         <QuickPlay onPlayDirect={onPlayDirect} />
+        <Settings
+          hasPlayers={players.length > 0}
+          hasQueue={queue.length > 0}
+          onGoToPlayers={onGoToPlayers}
+          onClearQueue={onClearQueue}
+          onResetGame={onResetGame}
+        />
       </div>
+    </div>
+  )
+}
+
+function Settings({ hasPlayers, hasQueue, onGoToPlayers, onClearQueue, onResetGame }) {
+  const [open, setOpen] = useState(false)
+  const [confirmReset, setConfirmReset] = useState(false)
+
+  if (!hasPlayers && !hasQueue) return null
+
+  return (
+    <div className="flex flex-col gap-2">
+      <button
+        onClick={() => { setOpen(!open); setConfirmReset(false) }}
+        className="text-sm text-white/40 underline-offset-2 hover:underline"
+      >
+        ⚙️ Налаштування {open ? '▴' : '▾'}
+      </button>
+      {open && (
+        <div className="flex flex-col gap-2 rounded-2xl bg-panel p-4">
+          <button
+            onClick={onGoToPlayers}
+            className="rounded-xl border border-white/15 px-4 py-3 text-left transition hover:bg-white/5"
+          >
+            🧑‍🤝‍🧑 Змінити гравців
+          </button>
+          <button
+            onClick={onClearQueue}
+            disabled={!hasQueue}
+            className="rounded-xl border border-white/15 px-4 py-3 text-left transition hover:bg-white/5 disabled:opacity-30"
+          >
+            🗑 Очистити чергу
+          </button>
+          {confirmReset ? (
+            <div className="flex flex-col gap-2 rounded-xl border border-red-400/40 p-3">
+              <p className="text-sm text-white/80">Точно скинути все? Гравці та черга зникнуть.</p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { setConfirmReset(false); setOpen(false); onResetGame() }}
+                  className="flex-1 rounded-xl bg-red-500 px-4 py-2 font-bold text-white transition hover:brightness-110"
+                >
+                  Так, скинути
+                </button>
+                <button
+                  onClick={() => setConfirmReset(false)}
+                  className="flex-1 rounded-xl border border-white/15 px-4 py-2 transition hover:bg-white/5"
+                >
+                  Ні
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setConfirmReset(true)}
+              className="rounded-xl border border-red-400/40 px-4 py-3 text-left text-red-300 transition hover:bg-red-500/10"
+            >
+              🔄 Скинути всю гру
+            </button>
+          )}
+        </div>
+      )}
     </div>
   )
 }
