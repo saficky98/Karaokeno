@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import HomeScreen from './screens/HomeScreen.jsx'
 import PlayersScreen from './screens/PlayersScreen.jsx'
 import SearchScreen from './screens/SearchScreen.jsx'
 import PlayScreen from './screens/PlayScreen.jsx'
 import ResultsScreen from './screens/ResultsScreen.jsx'
+import { loadState, saveState, clearState } from './lib/storage.js'
 
 const SCREENS = [
   { id: 'home', label: 'Головна', icon: '🎤' },
@@ -13,14 +14,27 @@ const SCREENS = [
   { id: 'results', label: 'Результати', icon: '🏆' },
 ]
 
-let nextId = 1
+const saved = loadState()
+
+// Čítač ID navazuje za nejvyšší uložené ID, aby po obnovení stránky nevznikaly duplicity.
+let nextId =
+  Math.max(0, ...[...(saved?.players ?? []), ...(saved?.queue ?? [])].map((item) => item.id)) + 1
+
+// Písnička rozehraná před obnovením stránky se vrátí na začátek fronty.
+const initialQueue = saved?.nowPlaying
+  ? [{ id: nextId++, ...saved.nowPlaying }, ...(saved.queue ?? [])]
+  : (saved?.queue ?? [])
 
 export default function App() {
   const [screen, setScreen] = useState('home')
-  const [players, setPlayers] = useState([])
-  const [queue, setQueue] = useState([])
-  // Співається саме зараз: { videoId, title, singer } або null.
+  const [players, setPlayers] = useState(saved?.players ?? [])
+  const [queue, setQueue] = useState(initialQueue)
+  // Співається саме зараз: { videoId, title, singerId } або null.
   const [nowPlaying, setNowPlaying] = useState(null)
+
+  useEffect(() => {
+    saveState({ players, queue, nowPlaying })
+  }, [players, queue, nowPlaying])
 
   function addPlayer(name, avatar, color) {
     setPlayers((list) => [...list, { id: nextId++, name, avatar, color }])
@@ -58,11 +72,7 @@ export default function App() {
         setNowPlaying(null)
         return list
       }
-      setNowPlaying({
-        videoId: next.videoId,
-        title: next.title,
-        singer: players.find((p) => p.id === next.singerId) ?? null,
-      })
+      setNowPlaying({ videoId: next.videoId, title: next.title, singerId: next.singerId })
       return rest
     })
     setScreen('play')
@@ -70,13 +80,29 @@ export default function App() {
 
   // Швидке відтворення за посиланням, без гравця і черги.
   function playDirect(videoId) {
-    setNowPlaying({ videoId, title: null, singer: null })
+    setNowPlaying({ videoId, title: null, singerId: null })
     setScreen('play')
   }
 
   function stopPlaying() {
     setNowPlaying(null)
   }
+
+  function clearQueue() {
+    setQueue([])
+    setNowPlaying(null)
+  }
+
+  function resetGame() {
+    setPlayers([])
+    setQueue([])
+    setNowPlaying(null)
+    clearState()
+    setScreen('home')
+  }
+
+  const withSinger = (item) =>
+    item ? { ...item, singer: players.find((p) => p.id === item.singerId) ?? null } : null
 
   return (
     <div className="flex h-full flex-col">
@@ -91,6 +117,8 @@ export default function App() {
             onStart={playNext}
             onGoToPlayers={() => setScreen('players')}
             onPlayDirect={playDirect}
+            onClearQueue={clearQueue}
+            onResetGame={resetGame}
           />
         )}
         {screen === 'players' && (
@@ -99,8 +127,8 @@ export default function App() {
         {screen === 'search' && <SearchScreen />}
         {screen === 'play' && (
           <PlayScreen
-            nowPlaying={nowPlaying}
-            nextItem={queue[0] ? { ...queue[0], singer: players.find((p) => p.id === queue[0].singerId) ?? null } : null}
+            nowPlaying={withSinger(nowPlaying)}
+            nextItem={withSinger(queue[0] ?? null)}
             onNext={playNext}
             onExit={stopPlaying}
             onPlayDirect={playDirect}
