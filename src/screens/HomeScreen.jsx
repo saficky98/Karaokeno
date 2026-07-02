@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import {
   ArrowDownToLine,
+  Check,
   ChevronDown,
   ChevronUp,
+  Copy,
   Globe,
   KeyRound,
   Link2,
@@ -10,12 +12,14 @@ import {
   Mic,
   Play,
   Plus,
+  Radio,
   RotateCcw,
   Settings2,
   Trash2,
   Users,
   X,
 } from 'lucide-react'
+import { buildRoomLink } from '../lib/roomLink.js'
 import { parseYouTubeId } from '../lib/youtube.js'
 import VideoLinkForm from '../components/VideoLinkForm.jsx'
 import Avatar from '../components/Avatar.jsx'
@@ -37,6 +41,11 @@ export default function HomeScreen({
   onEnqueueAllPlayerSongs,
   micConsent,
   onResetMicConsent,
+  room,
+  roomStatus,
+  guestCount,
+  onCreateRoom,
+  onCloseRoom,
 }) {
   const { t } = useLang()
   const songbookCount = players.reduce((sum, p) => sum + (p.songs?.length ?? 0), 0)
@@ -52,6 +61,14 @@ export default function HomeScreen({
           </h1>
           <p className="mt-2.5 text-sm tracking-wide text-white/50">{t('tagline')}</p>
         </header>
+
+        <RoomPanel
+          room={room}
+          roomStatus={roomStatus}
+          guestCount={guestCount}
+          onCreateRoom={onCreateRoom}
+          onCloseRoom={onCloseRoom}
+        />
 
         {players.length < 2 ? (
           <div className="card flex flex-col items-center gap-4 p-8 text-center">
@@ -106,12 +123,93 @@ export default function HomeScreen({
   )
 }
 
+function RoomPanel({ room, roomStatus, guestCount, onCreateRoom, onCloseRoom }) {
+  const { t } = useLang()
+  const [copied, setCopied] = useState(false)
+  const [confirmClose, setConfirmClose] = useState(false)
+
+  if (!room) {
+    return (
+      <div className="card flex flex-col gap-3 p-5">
+        <p className="section-label flex items-center gap-1.5">
+          <Radio size={13} strokeWidth={1.8} /> {t('room_section')}
+        </p>
+        <p className="text-sm text-white/55">{t('room_hint')}</p>
+        <button onClick={onCreateRoom} className="btn-secondary flex items-center justify-center gap-2 text-neon-cyan">
+          <Plus size={17} strokeWidth={2.2} /> {t('room_create')}
+        </button>
+      </div>
+    )
+  }
+
+  const link = buildRoomLink(room.id, room.secret)
+  const statusColor =
+    roomStatus === 'connected' ? 'bg-neon-lime' : roomStatus === 'connecting' ? 'bg-yellow-400' : 'bg-red-400'
+
+  async function copyLink() {
+    try {
+      await navigator.clipboard.writeText(link)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      // starší prohlížeče: text zůstává v poli k ručnímu zkopírování
+    }
+  }
+
+  return (
+    <div className="card flex flex-col gap-3 p-5">
+      <div className="flex items-center justify-between gap-2">
+        <p className="section-label flex items-center gap-1.5">
+          <Radio size={13} strokeWidth={1.8} /> {t('room_section')}
+        </p>
+        <span className="flex items-center gap-1.5 text-xs text-white/50">
+          <span className={`h-2 w-2 rounded-full ${statusColor}`} />
+          {t(`room_status_${roomStatus}`)}
+        </span>
+      </div>
+      <div>
+        <p className="mb-1.5 text-xs text-white/45">{t('room_link_label')}</p>
+        <div className="flex gap-2">
+          <input readOnly value={link} onFocus={(e) => e.target.select()} className="field flex-1 py-2 text-xs" />
+          <button onClick={copyLink} className="btn-secondary flex shrink-0 items-center gap-1.5 px-3 py-2 text-sm text-neon-cyan">
+            {copied ? <Check size={15} strokeWidth={2.2} /> : <Copy size={15} strokeWidth={1.8} />}
+            {copied ? t('copied') : t('copy')}
+          </button>
+        </div>
+      </div>
+      <p className="text-xs text-white/45">{t('room_guests', { n: guestCount })}</p>
+      {confirmClose ? (
+        <div className="flex flex-col gap-2 rounded-xl border border-red-400/40 p-3">
+          <p className="text-sm text-white/80">{t('room_close_confirm')}</p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => { setConfirmClose(false); onCloseRoom() }}
+              className="flex-1 rounded-xl bg-red-500 px-4 py-2 font-bold text-white transition hover:brightness-110"
+            >
+              {t('room_close')}
+            </button>
+            <button onClick={() => setConfirmClose(false)} className="btn-secondary flex-1">{t('no')}</button>
+          </div>
+        </div>
+      ) : (
+        <button
+          onClick={() => setConfirmClose(true)}
+          className="mx-auto text-xs text-red-300/70 underline-offset-2 hover:underline"
+        >
+          {t('room_close')}
+        </button>
+      )}
+    </div>
+  )
+}
+
 function AddSongForm({ players, queueLength, onAddSong }) {
   const { t } = useLang()
   const [link, setLink] = useState('')
   const [title, setTitle] = useState('')
-  // За замовчуванням гравці чергуються автоматично.
-  const defaultSingerId = players[queueLength % players.length].id
+  // За замовчуванням гравці чергуються автоматично. ID držíme jako text,
+  // protože hosté z místnosti mají textová ID.
+  const defaultSingerId = String(players[queueLength % players.length].id)
   const [singerId, setSingerId] = useState(null)
   const [error, setError] = useState(null)
 
@@ -122,7 +220,8 @@ function AddSongForm({ players, queueLength, onAddSong }) {
       setError(t('err_link'))
       return
     }
-    onAddSong(videoId, title.trim() || null, singerId ?? defaultSingerId)
+    const chosen = players.find((p) => String(p.id) === (singerId ?? defaultSingerId))
+    onAddSong(videoId, title.trim() || null, chosen?.id ?? players[0].id)
     setLink('')
     setTitle('')
     setSingerId(null)
@@ -151,11 +250,11 @@ function AddSongForm({ players, queueLength, onAddSong }) {
       <div className="flex flex-col gap-2 sm:flex-row">
         <select
           value={singerId ?? defaultSingerId}
-          onChange={(event) => setSingerId(Number(event.target.value))}
+          onChange={(event) => setSingerId(event.target.value)}
           className="field flex-1 text-base"
         >
           {players.map((player) => (
-            <option key={player.id} value={player.id}>{player.name}</option>
+            <option key={player.id} value={String(player.id)}>{player.name}</option>
           ))}
         </select>
         <button type="submit" className="btn-secondary flex items-center justify-center gap-1.5 text-neon-cyan">
