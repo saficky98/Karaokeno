@@ -27,7 +27,12 @@ const savedPlayers = (saved?.players ?? []).map((p) => ({ ...p, songs: p.songs ?
 let nextId =
   Math.max(
     0,
-    ...[...savedPlayers, ...(saved?.queue ?? []), ...savedPlayers.flatMap((p) => p.songs)].map((item) => item.id),
+    ...[
+      ...savedPlayers,
+      ...(saved?.queue ?? []),
+      ...(saved?.results ?? []),
+      ...savedPlayers.flatMap((p) => p.songs),
+    ].map((item) => item.id),
   ) + 1
 
 // Písnička rozehraná před obnovením stránky se vrátí na začátek fronty.
@@ -41,10 +46,27 @@ export default function App() {
   const [queue, setQueue] = useState(initialQueue)
   // Співається саме зараз: { videoId, title, singerId } або null.
   const [nowPlaying, setNowPlaying] = useState(null)
+  const [results, setResults] = useState(saved?.results ?? [])
+  const [micConsent, setMicConsent] = useState(saved?.micConsent ?? null)
 
   useEffect(() => {
-    saveState({ players, queue, nowPlaying })
-  }, [players, queue, nowPlaying])
+    saveState({ players, queue, nowPlaying, results, micConsent })
+  }, [players, queue, nowPlaying, results, micConsent])
+
+  // Průběžný žebříček: součet bodů podle hráče, seřazený sestupně.
+  const leaderboard = players
+    .map((player) => ({
+      player,
+      total: results.filter((r) => r.singerId === player.id).reduce((sum, r) => sum + r.score, 0),
+      songs: results.filter((r) => r.singerId === player.id).length,
+    }))
+    .filter((entry) => entry.songs > 0)
+    .sort((a, b) => b.total - a.total)
+
+  function recordResult({ score, singerId, title }) {
+    if (singerId === null) return // rychlé přehrání bez hráče se do žebříčku nepočítá
+    setResults((list) => [...list, { id: nextId++, singerId, title, score }])
+  }
 
   function addPlayer(name, avatar, color) {
     setPlayers((list) => [...list, { id: nextId++, name, avatar, color, songs: [] }])
@@ -147,6 +169,7 @@ export default function App() {
     setPlayers([])
     setQueue([])
     setNowPlaying(null)
+    setResults([])
     clearState()
     setScreen('home')
   }
@@ -170,6 +193,8 @@ export default function App() {
             onClearQueue={clearQueue}
             onResetGame={resetGame}
             onEnqueueAllPlayerSongs={enqueueAllPlayerSongs}
+            micConsent={micConsent}
+            onResetMicConsent={() => setMicConsent(null)}
           />
         )}
         {screen === 'players' && (
@@ -194,13 +219,19 @@ export default function App() {
           <PlayScreen
             nowPlaying={withSinger(nowPlaying)}
             nextItem={withSinger(queue[0] ?? null)}
+            micConsent={micConsent}
+            onMicConsent={setMicConsent}
             onNext={playNext}
             onExit={stopPlaying}
             onPlayDirect={playDirect}
             onGoHome={() => setScreen('home')}
+            onSongFinished={recordResult}
+            leaderboard={leaderboard}
           />
         )}
-        {screen === 'results' && <ResultsScreen />}
+        {screen === 'results' && (
+          <ResultsScreen leaderboard={leaderboard} results={results} players={players} />
+        )}
       </main>
 
       <nav className="flex shrink-0 justify-around border-t border-white/10 bg-panel/90 pb-[env(safe-area-inset-bottom)] backdrop-blur">

@@ -1,11 +1,39 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import YouTubePlayer from '../components/YouTubePlayer.jsx'
 import VideoLinkForm from '../components/VideoLinkForm.jsx'
+import LiveScoreHUD from '../components/LiveScoreHUD.jsx'
+import { requestMic, hasMic, startAnalysis } from '../lib/mic.js'
+import { ScoreEngine, scoreComment } from '../lib/scoring.js'
 
-export default function PlayScreen({ nowPlaying, nextItem, onNext, onExit, onPlayDirect, onGoHome }) {
+export default function PlayScreen({
+  nowPlaying,
+  nextItem,
+  micConsent, // null = ještě jsme se neptali, 'on' = povoleno, 'off' = bez skórování
+  onMicConsent,
+  onNext,
+  onExit,
+  onPlayDirect,
+  onGoHome,
+  onSongFinished,
+  leaderboard,
+}) {
   const [playerError, setPlayerError] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [result, setResult] = useState(null) // {score, comment} po dozpívání
   const [ended, setEnded] = useState(false)
+  const [live, setLive] = useState(null) // {score, level, singing}
+  const [micFailed, setMicFailed] = useState(false)
+
+  const engineRef = useRef(null)
+  const stopRef = useRef(null)
+  const playerApiRef = useRef(null)
+
+  const scoringActive = micConsent === 'on' && !micFailed
+
+  // Úklid analýzy při odchodu z obrazovky / výměně písničky
+  useEffect(() => {
+    return () => stopRef.current?.()
+  }, [nowPlaying?.videoId])
 
   if (!nowPlaying) {
     return (
@@ -21,15 +49,99 @@ export default function PlayScreen({ nowPlaying, nextItem, onNext, onExit, onPla
     )
   }
 
+  // Před první písničkou se slušně zeptáme na mikrofon.
+  if (micConsent === null) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-5 p-6 text-center">
+        <p className="text-5xl">🎙</p>
+        <h2 className="text-2xl font-black">Дозволиш мікрофон?</h2>
+        <p className="max-w-md text-white/70">
+          Ми слухатимемо спів і рахуватимемо веселі бали: скільки співаєш, як тримаєш ноту і скільки
+          в тебе енергії. Звук <b>нікуди не записується і не надсилається</b> — все рахується прямо
+          на цьому пристрої.
+        </p>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <button
+            onClick={async () => {
+              try {
+                await requestMic()
+                onMicConsent('on')
+              } catch {
+                setMicFailed(true)
+                onMicConsent('off')
+              }
+            }}
+            className="rounded-2xl bg-neon-pink px-8 py-4 text-lg font-black text-white shadow-lg shadow-neon-pink/30 transition hover:brightness-110 active:scale-95"
+          >
+            Дозволити і співати 🎤
+          </button>
+          <button
+            onClick={() => onMicConsent('off')}
+            className="rounded-2xl border border-white/20 px-8 py-4 text-lg font-bold text-white/70 transition hover:bg-white/5"
+          >
+            Без балів
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   const { videoId, title, singer } = nowPlaying
+
+  async function startScoring() {
+    if (!scoringActive) return
+    if (!hasMic()) {
+      // po obnovení stránky je potřeba mikrofon získat znovu (prohlížeč si souhlas pamatuje)
+      try {
+        await requestMic()
+      } catch {
+        setMicFailed(true)
+        return
+      }
+    }
+    const duration = playerApiRef.current?.getDuration?.() || 180
+    engineRef.current = new ScoreEngine(duration)
+    stopRef.current?.()
+    stopRef.current = startAnalysis((frame) => {
+      const state = engineRef.current?.update(frame)
+      if (state) setLive(state)
+    })
+  }
+
+  function finishSong() {
+    stopRef.current?.()
+    stopRef.current = null
+    let outcome = null
+    if (engineRef.current) {
+      const final = engineRef.current.finish()
+      outcome = { score: final.score, comment: scoreComment(final.score) }
+      engineRef.current = null
+      onSongFinished?.({ score: final.score, singerId: singer?.id ?? null, title })
+    }
+    setResult(outcome)
+    setEnded(true)
+    setLive(null)
+  }
+
+  function goNext() {
+    setEnded(false)
+    setResult(null)
+    setLoading(true)
+    setPlayerError(null)
+    onNext()
+  }
 
   return (
     <div className="relative h-full">
       <YouTubePlayer
         key={videoId}
         videoId={videoId}
-        onReady={() => setLoading(false)}
-        onEnded={() => setEnded(true)}
+        onReady={(playerApi) => {
+          playerApiRef.current = playerApi
+          setLoading(false)
+          startScoring()
+        }}
+        onEnded={finishSong}
         onError={(code) => setPlayerError(code)}
       />
 
@@ -39,7 +151,10 @@ export default function PlayScreen({ nowPlaying, nextItem, onNext, onExit, onPla
         </div>
       )}
 
-      {/* Бейдж співака — біля краю, щоб не закривати текст пісні. */}
+      {live && !ended && playerError === null && (
+        <LiveScoreHUD score={live.score} level={live.level} singing={live.singing} />
+      )}
+
       {singer && !ended && (
         <div
           className="absolute top-3 left-3 flex items-center gap-2 rounded-full bg-black/60 px-3 py-1.5 text-sm backdrop-blur"
@@ -62,38 +177,64 @@ export default function PlayScreen({ nowPlaying, nextItem, onNext, onExit, onPla
           </p>
           {nextItem ? (
             <button
-              onClick={() => { setPlayerError(null); setLoading(true); setEnded(false); onNext() }}
+              onClick={goNext}
               className="rounded-xl bg-neon-pink px-6 py-3 font-bold text-white transition hover:brightness-110 active:scale-95"
             >
               Наступна пісня ⏭
             </button>
           ) : (
             <div className="w-full max-w-xl">
-              <VideoLinkForm onPlayVideo={(id) => { setPlayerError(null); setLoading(true); setEnded(false); onPlayDirect(id) }} />
+              <VideoLinkForm onPlayVideo={(id) => { setPlayerError(null); setLoading(true); onPlayDirect(id) }} />
             </div>
           )}
         </div>
       )}
 
-      {/* Пісня закінчилась → пропонуємо наступного співака. */}
+      {/* Po dozpívání: výsledek, žebříček a další zpěvák */}
       {ended && playerError === null && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 bg-night/95 p-6 text-center">
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-5 overflow-y-auto bg-night/95 p-6 text-center">
+          {result && (
+            <div className="flex flex-col items-center gap-1">
+              <p className="text-white/60">{singer ? `${singer.avatar} ${singer.name}` : 'Результат'}</p>
+              <p className="bg-gradient-to-r from-neon-pink to-neon-cyan bg-clip-text font-mono text-6xl font-black text-transparent tabular-nums">
+                {result.score.toLocaleString('uk-UA')}
+              </p>
+              <p className="max-w-md text-lg text-white/80">{result.comment}</p>
+            </div>
+          )}
+
+          {leaderboard?.length > 0 && (
+            <div className="w-full max-w-sm rounded-2xl bg-panel p-4 text-left">
+              <p className="mb-2 text-sm font-bold text-white/60">🏆 Рейтинг вечірки</p>
+              <ol className="flex flex-col gap-1">
+                {leaderboard.slice(0, 3).map((entry, index) => (
+                  <li key={entry.player.id} className="flex items-center gap-2">
+                    <span className="w-6">{['🥇', '🥈', '🥉'][index]}</span>
+                    <span className="text-lg">{entry.player.avatar}</span>
+                    <span className="flex-1 truncate font-bold">{entry.player.name}</span>
+                    <span className="font-mono text-neon-cyan tabular-nums">{entry.total.toLocaleString('uk-UA')}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
+
           {nextItem ? (
             <>
-              <p className="text-white/60">Далі співає:</p>
               <div className="flex items-center gap-3">
-                {nextItem.singer && <span className="text-5xl">{nextItem.singer.avatar}</span>}
+                {nextItem.singer && <span className="text-4xl">{nextItem.singer.avatar}</span>}
                 <div className="text-left">
+                  <p className="text-sm text-white/60">Далі співає:</p>
                   {nextItem.singer && (
-                    <p className="text-3xl font-black" style={{ color: nextItem.singer.color }}>
+                    <p className="text-2xl font-black" style={{ color: nextItem.singer.color }}>
                       {nextItem.singer.name}
                     </p>
                   )}
-                  <p className="text-white/70">{nextItem.title || 'Наступна пісня з черги'}</p>
+                  <p className="max-w-60 truncate text-white/70">{nextItem.title || 'Наступна пісня з черги'}</p>
                 </div>
               </div>
               <button
-                onClick={() => { setEnded(false); setLoading(true); onNext() }}
+                onClick={goNext}
                 className="rounded-2xl bg-neon-pink px-8 py-4 text-xl font-black text-white shadow-lg shadow-neon-pink/30 transition hover:brightness-110 active:scale-95"
               >
                 Вдуй! 🎤
@@ -101,10 +242,9 @@ export default function PlayScreen({ nowPlaying, nextItem, onNext, onExit, onPla
             </>
           ) : (
             <>
-              <p className="text-4xl">🎉</p>
-              <p className="max-w-md text-white/80">Черга порожня. Додай ще пісень — вечірка тільки починається!</p>
+              <p className="max-w-md text-white/80">Черга порожня. Додай ще пісень — вечірка тільки починається! 🎉</p>
               <button
-                onClick={() => { setEnded(false); onExit(); onGoHome() }}
+                onClick={() => { setEnded(false); setResult(null); onExit(); onGoHome() }}
                 className="rounded-xl bg-neon-cyan px-6 py-3 font-bold text-night transition hover:brightness-110 active:scale-95"
               >
                 На головну

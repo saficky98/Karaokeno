@@ -42,7 +42,7 @@ export default function YouTubePlayer({ videoId, onReady, onEnded, onError }) {
         videoId,
         playerVars: { autoplay: 1, playsinline: 1, rel: 0 },
         events: {
-          onReady: () => callbacksRef.current.onReady?.(),
+          onReady: (event) => callbacksRef.current.onReady?.(event.target),
           onStateChange: (event) => {
             if (event.data === YT.PlayerState.ENDED) callbacksRef.current.onEnded?.()
           },
