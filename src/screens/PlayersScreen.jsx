@@ -44,7 +44,7 @@ export default function PlayersScreen({
     <div className="h-full overflow-y-auto">
       <div className="mx-auto flex max-w-xl flex-col gap-6 p-6">
         <div>
-          <h2 className="text-3xl font-black">Гравці</h2>
+          <h2 className="font-display text-3xl font-black">Гравці</h2>
           <p className="mt-1 text-white/60">Додай від 2 до 8 гравців — співатимете по черзі.</p>
         </div>
 

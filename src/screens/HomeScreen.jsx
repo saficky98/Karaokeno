@@ -23,9 +23,10 @@ export default function HomeScreen({
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto flex max-w-xl flex-col gap-6 p-6">
-        <div className="text-center">
-          <h1 className="text-5xl font-black tracking-tight sm:text-6xl">
-            <span className="bg-gradient-to-r from-neon-pink to-neon-cyan bg-clip-text text-transparent">
+        <div className="pt-2 text-center">
+          <p className="animate-float text-3xl" aria-hidden="true">🎤</p>
+          <h1 className="font-display text-5xl font-black tracking-tight sm:text-6xl">
+            <span className="bg-gradient-to-r from-neon-pink via-neon-violet to-neon-cyan bg-clip-text text-transparent drop-shadow-[0_0_25px_rgba(255,45,146,0.35)]">
               Vdui
             </span>
           </h1>
@@ -66,7 +67,7 @@ export default function HomeScreen({
             {queue.length > 0 && (
               <button
                 onClick={onStart}
-                className="rounded-2xl bg-neon-pink px-6 py-4 text-xl font-black text-white shadow-lg shadow-neon-pink/30 transition hover:brightness-110 active:scale-95"
+                className="rounded-2xl bg-gradient-to-r from-neon-pink to-neon-violet px-6 py-4 font-display text-lg font-bold text-white shadow-glow-pink transition hover:brightness-110 active:scale-95"
               >
                 🎤 Почати вечірку!
               </button>

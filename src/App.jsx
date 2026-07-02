@@ -178,8 +178,8 @@ export default function App() {
     item ? { ...item, singer: players.find((p) => p.id === item.singerId) ?? null } : null
 
   return (
-    <div className="flex h-full flex-col">
-      <main className="min-h-0 flex-1">
+    <div className="party-bg flex h-full flex-col">
+      <main key={screen} className="min-h-0 flex-1 animate-screen-in">
         {screen === 'home' && (
           <HomeScreen
             players={players}
@@ -234,17 +234,19 @@ export default function App() {
         )}
       </main>
 
-      <nav className="flex shrink-0 justify-around border-t border-white/10 bg-panel/90 pb-[env(safe-area-inset-bottom)] backdrop-blur">
+      <nav className="flex shrink-0 justify-around gap-1 border-t border-white/10 bg-panel/80 px-1 pt-1.5 pb-[max(0.375rem,env(safe-area-inset-bottom))] backdrop-blur-md">
         {SCREENS.map((item) => (
           <button
             key={item.id}
             onClick={() => setScreen(item.id)}
-            className={`flex flex-col items-center gap-0.5 px-2 py-2 text-xs transition-colors sm:flex-row sm:gap-2 sm:text-sm ${
-              screen === item.id ? 'text-neon-pink' : 'text-white/60 hover:text-white'
+            className={`flex min-w-0 flex-col items-center gap-0.5 rounded-xl px-3 py-1.5 text-[11px] font-medium transition-all sm:flex-row sm:gap-2 sm:text-sm ${
+              screen === item.id
+                ? 'bg-neon-pink/15 text-neon-pink shadow-glow-pink'
+                : 'text-white/55 hover:bg-white/5 hover:text-white'
             }`}
           >
             <span aria-hidden="true" className="text-lg sm:text-base">{item.icon}</span>
-            {item.label}
+            <span className="truncate">{item.label}</span>
           </button>
         ))}
       </nav>

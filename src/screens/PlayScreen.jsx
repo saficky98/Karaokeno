@@ -1,9 +1,61 @@
-import { useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import confetti from 'canvas-confetti'
 import YouTubePlayer from '../components/YouTubePlayer.jsx'
 import VideoLinkForm from '../components/VideoLinkForm.jsx'
 import LiveScoreHUD from '../components/LiveScoreHUD.jsx'
 import { requestMic, hasMic, startAnalysis } from '../lib/mic.js'
 import { ScoreEngine, scoreComment } from '../lib/scoring.js'
+
+// Panel s textem (a knihovna přepisu písma) se stahuje až při prvním otevření.
+const LyricsPanel = lazy(() => import('../components/LyricsPanel.jsx'))
+
+// Odpočet 3-2-1 přes rozjíždějící se video
+function Countdown({ onDone }) {
+  const [step, setStep] = useState(3)
+
+  useEffect(() => {
+    if (step === 0) {
+      onDone()
+      return
+    }
+    const timer = setTimeout(() => setStep((s) => s - 1), 850)
+    return () => clearTimeout(timer)
+  }, [step])
+
+  if (step === 0) return null
+  return (
+    <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-night/70">
+      <p key={step} className="animate-count-zoom font-display text-9xl font-black text-neon-pink drop-shadow-[0_0_40px_rgba(255,45,146,0.8)]">
+        {step}
+      </p>
+    </div>
+  )
+}
+
+// Skóre naskakuje od nuly k výsledku
+function CountUpScore({ value }) {
+  const [shown, setShown] = useState(0)
+
+  useEffect(() => {
+    const start = performance.now()
+    const duration = 1600
+    let frame
+    function tick(now) {
+      const progress = Math.min(1, (now - start) / duration)
+      const eased = 1 - Math.pow(1 - progress, 3)
+      setShown(Math.round(value * eased))
+      if (progress < 1) frame = requestAnimationFrame(tick)
+    }
+    frame = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(frame)
+  }, [value])
+
+  return (
+    <p className="bg-gradient-to-r from-neon-pink to-neon-cyan bg-clip-text font-display text-6xl font-black text-transparent tabular-nums">
+      {shown.toLocaleString('uk-UA')}
+    </p>
+  )
+}
 
 export default function PlayScreen({
   nowPlaying,
@@ -23,6 +75,8 @@ export default function PlayScreen({
   const [ended, setEnded] = useState(false)
   const [live, setLive] = useState(null) // {score, level, singing}
   const [micFailed, setMicFailed] = useState(false)
+  const [counting, setCounting] = useState(true)
+  const [showLyrics, setShowLyrics] = useState(false)
 
   const engineRef = useRef(null)
   const stopRef = useRef(null)
@@ -34,6 +88,23 @@ export default function PlayScreen({
   useEffect(() => {
     return () => stopRef.current?.()
   }, [nowPlaying?.videoId])
+
+  // Konfety při skvělém výsledku 🎉
+  useEffect(() => {
+    if (!ended || !result || result.score < 7500) return
+    const bursts = [0, 400, 900].map((delay) =>
+      setTimeout(() => {
+        confetti({
+          particleCount: 90,
+          spread: 75,
+          origin: { y: 0.7, x: 0.2 + Math.random() * 0.6 },
+          colors: ['#ff2d92', '#22d3ee', '#a3e635', '#a78bfa', '#facc15'],
+          disableForReducedMotion: true,
+        })
+      }, delay),
+    )
+    return () => bursts.forEach(clearTimeout)
+  }, [ended, result])
 
   if (!nowPlaying) {
     return (
@@ -128,6 +199,8 @@ export default function PlayScreen({
     setResult(null)
     setLoading(true)
     setPlayerError(null)
+    setCounting(true)
+    setShowLyrics(false)
     onNext()
   }
 
@@ -145,10 +218,27 @@ export default function PlayScreen({
         onError={(code) => setPlayerError(code)}
       />
 
-      {loading && playerError === null && !ended && (
+      {loading && playerError === null && !ended && !counting && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
           <p className="animate-pulse text-white/70">Завантажую відео…</p>
         </div>
+      )}
+
+      {counting && playerError === null && !ended && <Countdown onDone={() => setCounting(false)} />}
+
+      {showLyrics && !ended && playerError === null && (
+        <Suspense fallback={null}>
+          <LyricsPanel title={title} playerApiRef={playerApiRef} onClose={() => setShowLyrics(false)} />
+        </Suspense>
+      )}
+
+      {!ended && playerError === null && !counting && !showLyrics && (
+        <button
+          onClick={() => setShowLyrics(true)}
+          className="absolute right-3 bottom-3 rounded-full bg-black/60 px-4 py-2 text-sm text-white/90 backdrop-blur transition hover:bg-black/80"
+        >
+          🔤 Текст
+        </button>
       )}
 
       {live && !ended && playerError === null && (
@@ -194,11 +284,9 @@ export default function PlayScreen({
       {ended && playerError === null && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-5 overflow-y-auto bg-night/95 p-6 text-center">
           {result && (
-            <div className="flex flex-col items-center gap-1">
+            <div className="flex animate-pop-in flex-col items-center gap-1">
               <p className="text-white/60">{singer ? `${singer.avatar} ${singer.name}` : 'Результат'}</p>
-              <p className="bg-gradient-to-r from-neon-pink to-neon-cyan bg-clip-text font-mono text-6xl font-black text-transparent tabular-nums">
-                {result.score.toLocaleString('uk-UA')}
-              </p>
+              <CountUpScore value={result.score} />
               <p className="max-w-md text-lg text-white/80">{result.comment}</p>
             </div>
           )}
