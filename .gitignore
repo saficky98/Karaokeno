@@ -1,0 +1,14 @@
+# Závislosti
+node_modules/
+
+# Build výstup
+dist/
+
+# API klíče a tajnosti — NIKDY necommitovat!
+.env
+.env.local
+.env.*.local
+
+# Logy a systémové soubory
+*.log
+.DS_Store
