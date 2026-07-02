@@ -1,9 +1,10 @@
 import { useState } from 'react'
+import { KeyRound, Link2, Plus, Search } from 'lucide-react'
 import { searchKaraoke, getApiKey, setApiKey } from '../lib/youtubeApi.js'
 import { parseYouTubeId } from '../lib/youtube.js'
 
 const ERROR_TEXT = {
-  quota: 'Денний ліміт пошуку YouTube вичерпано 😴 Додай пісню посиланням нижче — це працює завжди.',
+  quota: 'Денний ліміт пошуку YouTube вичерпано. Додай пісню посиланням нижче — це працює завжди.',
   key: 'Пошук не працює: ключ YouTube не приймається. Додай пісню посиланням нижче, а хазяїну вечірки скажи перевірити ключ у Налаштуваннях.',
   network: 'Не вдалося зʼєднатися з YouTube. Перевір інтернет і спробуй ще раз.',
 }
@@ -35,9 +36,14 @@ export default function SongPicker({ onPick, compact = false }) {
   if (!hasKey) {
     return (
       <div className="flex flex-col gap-3">
-        <div className="rounded-2xl border border-white/15 bg-panel p-4 text-sm text-white/70">
-          <p>🔑 Пошук на цьому пристрої ще не активовано.</p>
-          <p className="mt-1">Хазяїн вечірки має відкрити спеціальне посилання-активатор — або встав ключ YouTube API сюди:</p>
+        <div className="card p-4 text-sm text-white/65">
+          <p className="flex items-center gap-2">
+            <KeyRound size={15} strokeWidth={1.8} className="shrink-0 text-white/40" />
+            Пошук на цьому пристрої ще не активовано.
+          </p>
+          <p className="mt-1.5">
+            Хазяїн вечірки має відкрити спеціальне посилання-активатор — або встав ключ YouTube API сюди:
+          </p>
           <KeyInput onSaved={() => setHasKey(true)} />
         </div>
         <LinkFallback onPick={onPick} alwaysOpen={compact} />
@@ -53,23 +59,24 @@ export default function SongPicker({ onPick, compact = false }) {
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Назва пісні або виконавець…"
-          className="min-w-0 flex-1 rounded-xl border border-white/15 bg-night px-4 py-3 text-base placeholder-white/30 outline-none focus:border-neon-cyan"
+          className="field flex-1 text-base"
         />
         <button
           type="submit"
           disabled={loading}
-          className="rounded-xl bg-neon-pink px-5 py-3 font-bold text-white transition hover:brightness-110 active:scale-95 disabled:opacity-50"
+          aria-label="Шукати"
+          className="btn-primary flex items-center justify-center px-4 disabled:opacity-50"
         >
-          🔍
+          <Search size={18} strokeWidth={2.2} />
         </button>
       </form>
 
-      {loading && <p className="animate-pulse text-center text-white/60">Шукаю караоке-версії…</p>}
+      {loading && <p className="animate-pulse text-center text-sm text-white/55">Шукаю караоке-версії…</p>}
 
       {error && <p className="rounded-xl bg-red-500/10 p-3 text-sm text-red-300">{ERROR_TEXT[error] ?? ERROR_TEXT.network}</p>}
 
       {results?.length === 0 && (
-        <p className="text-center text-white/60">Нічого не знайшлося 🤷 Спробуй іншу назву або додай посиланням нижче.</p>
+        <p className="text-center text-sm text-white/55">Нічого не знайшлося. Спробуй іншу назву або додай посиланням нижче.</p>
       )}
 
       {results?.length > 0 && (
@@ -78,19 +85,21 @@ export default function SongPicker({ onPick, compact = false }) {
             <li key={song.videoId}>
               <button
                 onClick={() => onPick({ videoId: song.videoId, title: song.title })}
-                className="flex w-full items-center gap-3 rounded-2xl bg-panel p-2 pr-3 text-left transition hover:bg-white/10 active:scale-[0.99]"
+                className="card flex w-full items-center gap-3 p-2 pr-3.5 text-left transition hover:bg-panel-2 active:scale-[0.99]"
               >
                 <div className="relative shrink-0">
                   <img src={song.thumb} alt="" loading="lazy" className="h-14 w-24 rounded-xl object-cover" />
                   {song.duration && (
-                    <span className="absolute right-1 bottom-1 rounded bg-black/80 px-1 text-xs">{song.duration}</span>
+                    <span className="absolute right-1 bottom-1 rounded-md bg-black/80 px-1.5 py-0.5 text-[10px] tabular-nums">
+                      {song.duration}
+                    </span>
                   )}
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="line-clamp-2 text-sm font-bold">{song.title}</p>
-                  <p className="truncate text-xs text-white/50">{song.channel}</p>
+                  <p className="mt-0.5 truncate text-xs text-white/40">{song.channel}</p>
                 </div>
-                <span className="shrink-0 text-xl text-neon-cyan">＋</span>
+                <Plus size={18} strokeWidth={2.2} className="shrink-0 text-neon-cyan" />
               </button>
             </li>
           ))}
@@ -120,9 +129,9 @@ export function KeyInput({ onSaved }) {
         value={value}
         onChange={(event) => setValue(event.target.value)}
         placeholder="AIza…"
-        className="min-w-0 flex-1 rounded-xl border border-white/15 bg-night px-3 py-2 text-sm placeholder-white/30 outline-none focus:border-neon-cyan"
+        className="field flex-1 py-2 text-sm"
       />
-      <button type="submit" className="rounded-xl bg-neon-cyan px-4 py-2 text-sm font-bold text-night">
+      <button type="submit" className="btn-secondary px-4 py-2 text-sm text-neon-cyan">
         Зберегти
       </button>
     </form>
@@ -136,8 +145,11 @@ function LinkFallback({ onPick, alwaysOpen = false }) {
 
   if (!open) {
     return (
-      <button onClick={() => setOpen(true)} className="text-sm text-white/40 underline-offset-2 hover:underline">
-        …або встав посилання на YouTube →
+      <button
+        onClick={() => setOpen(true)}
+        className="mx-auto flex items-center gap-1.5 text-sm text-white/35 underline-offset-2 hover:underline"
+      >
+        <Link2 size={14} strokeWidth={1.8} /> …або встав посилання на YouTube
       </button>
     )
   }
@@ -163,10 +175,10 @@ function LinkFallback({ onPick, alwaysOpen = false }) {
           value={link}
           onChange={(event) => setLink(event.target.value)}
           placeholder="https://www.youtube.com/watch?v=…"
-          className="min-w-0 flex-1 rounded-xl border border-white/15 bg-night px-4 py-3 text-base placeholder-white/30 outline-none focus:border-neon-cyan"
+          className="field flex-1 text-base"
         />
-        <button type="submit" className="rounded-xl bg-neon-cyan px-4 py-3 font-bold text-night transition hover:brightness-110 active:scale-95">
-          ＋
+        <button type="submit" aria-label="Додати" className="btn-secondary flex items-center px-4 text-neon-cyan">
+          <Plus size={18} strokeWidth={2.2} />
         </button>
       </div>
       {error && <p className="text-sm text-red-400">{error}</p>}

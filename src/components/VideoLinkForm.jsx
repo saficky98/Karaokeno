@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Play } from 'lucide-react'
 import { parseYouTubeId } from '../lib/youtube.js'
 
 export default function VideoLinkForm({ onPlayVideo, autoFocus = false }) {
@@ -27,13 +28,10 @@ export default function VideoLinkForm({ onPlayVideo, autoFocus = false }) {
           onChange={(event) => setLink(event.target.value)}
           placeholder="https://www.youtube.com/watch?v=…"
           autoFocus={autoFocus}
-          className="min-w-0 flex-1 rounded-xl border border-white/15 bg-panel px-4 py-3 text-base placeholder-white/30 outline-none focus:border-neon-cyan"
+          className="field flex-1 text-base"
         />
-        <button
-          type="submit"
-          className="rounded-xl bg-neon-pink px-6 py-3 font-bold text-white transition hover:brightness-110 active:scale-95"
-        >
-          Грати
+        <button type="submit" className="btn-primary flex items-center justify-center gap-2">
+          <Play size={16} strokeWidth={2.2} fill="currentColor" /> Грати
         </button>
       </div>
       {error && <p className="text-sm text-red-400">{error}</p>}

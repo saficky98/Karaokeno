@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Languages, X } from 'lucide-react'
 import { fetchLyrics, needsTransliteration, romanize } from '../lib/lyrics.js'
 
 // Panel u spodního okraje: text písně, u cizího písma i přepis výslovnosti.
@@ -37,26 +38,29 @@ export default function LyricsPanel({ title, playerApiRef, onClose }) {
   }, [lyrics])
 
   return (
-    <div className="absolute inset-x-0 bottom-0 max-h-[38%] overflow-hidden rounded-t-2xl border-t border-white/10 bg-black/80 backdrop-blur-md">
+    <div className="absolute inset-x-0 bottom-0 max-h-[38%] overflow-hidden rounded-t-2xl border-t border-line bg-black/80 backdrop-blur-md">
       <div className="flex items-center gap-2 px-3 pt-2 text-xs text-white/50">
-        <span className="min-w-0 flex-1 truncate">
-          🔤 {state === 'ready' ? lyrics.match : 'Текст пісні'}
+        <span className="flex min-w-0 flex-1 items-center gap-1.5 truncate">
+          <Languages size={13} strokeWidth={1.8} className="shrink-0" />
+          {state === 'ready' ? lyrics.match : 'Текст пісні'}
         </span>
         {lyrics?.synced && (
           <>
-            <button onClick={() => setOffset((o) => o - 2)} className="rounded bg-white/10 px-2 py-0.5 hover:bg-white/20">−2с</button>
+            <button onClick={() => setOffset((o) => o - 2)} className="rounded-md bg-white/10 px-2 py-0.5 hover:bg-white/20">−2с</button>
             <span className="tabular-nums">{offset > 0 ? `+${offset}` : offset}с</span>
-            <button onClick={() => setOffset((o) => o + 2)} className="rounded bg-white/10 px-2 py-0.5 hover:bg-white/20">+2с</button>
+            <button onClick={() => setOffset((o) => o + 2)} className="rounded-md bg-white/10 px-2 py-0.5 hover:bg-white/20">+2с</button>
           </>
         )}
-        <button onClick={onClose} aria-label="Закрити текст" className="rounded bg-white/10 px-2 py-0.5 hover:bg-white/20">✕</button>
+        <button onClick={onClose} aria-label="Закрити текст" className="rounded-md bg-white/10 p-1 hover:bg-white/20">
+          <X size={13} strokeWidth={2} />
+        </button>
       </div>
 
       {state === 'loading' && <p className="animate-pulse p-4 text-center text-sm text-white/60">Шукаю текст пісні…</p>}
 
       {state === 'empty' && (
         <p className="p-4 text-center text-sm text-white/60">
-          Текст не знайшовся 🤷 (шукаємо за назвою відео — вона буває неточна)
+          Текст не знайшовся (шукаємо за назвою відео — вона буває неточна).
         </p>
       )}
 

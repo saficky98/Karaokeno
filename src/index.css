@@ -9,43 +9,39 @@
   --font-display: "Unbounded", system-ui, sans-serif;
   --font-sans: "Rubik", system-ui, sans-serif;
 
-  --color-night: #08060f;
-  --color-panel: #16122b;
-  --color-panel-2: #1d1838;
-  --color-neon-pink: #ff2d92;
-  --color-neon-cyan: #22d3ee;
+  --color-night: #0b0a12;
+  --color-panel: #131120;
+  --color-panel-2: #191627;
+  --color-line: rgba(255, 255, 255, 0.08);
+  --color-neon-pink: #f43f8e;
+  --color-neon-cyan: #38cdec;
   --color-neon-lime: #a3e635;
-  --color-neon-violet: #a78bfa;
+  --color-neon-violet: #8b7cf6;
 
-  --shadow-glow-pink: 0 0 24px rgba(255, 45, 146, 0.45);
-  --shadow-glow-cyan: 0 0 24px rgba(34, 211, 238, 0.35);
+  --shadow-glow-pink: 0 8px 32px rgba(244, 63, 142, 0.28);
+  --shadow-glow-cyan: 0 8px 32px rgba(56, 205, 236, 0.22);
+  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 8px 24px rgba(0, 0, 0, 0.35);
 
-  --animate-screen-in: screen-in 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-screen-in: screen-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both;
   --animate-pop-in: pop-in 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
   --animate-count-zoom: count-zoom 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) both;
-  --animate-float: float 6s ease-in-out infinite;
 }
 
 @keyframes screen-in {
-  from { opacity: 0; transform: translateY(14px); }
+  from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: none; }
 }
 
 @keyframes pop-in {
-  from { opacity: 0; transform: scale(0.7); }
+  from { opacity: 0; transform: scale(0.75); }
   to { opacity: 1; transform: scale(1); }
 }
 
 @keyframes count-zoom {
-  0% { opacity: 0; transform: scale(0.3); }
-  25% { opacity: 1; transform: scale(1.15); }
+  0% { opacity: 0; transform: scale(0.4); }
+  25% { opacity: 1; transform: scale(1.12); }
   55% { transform: scale(1); opacity: 1; }
-  100% { opacity: 0; transform: scale(1.6); }
-}
-
-@keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-10px); }
+  100% { opacity: 0; transform: scale(1.5); }
 }
 
 html,
@@ -57,19 +53,76 @@ body,
 body {
   font-family: var(--font-sans);
   background-color: var(--color-night);
-  color: #f4f4f8;
+  color: #f2f1f7;
   -webkit-font-smoothing: antialiased;
 }
 
-/* Jemné neonové „párty" pozadí — dvě barevné mlhoviny, žádný pohyb do videa */
+/* Velmi jemné barevné tónování pozadí — decentní, žádná diskotéka mimo video */
 .party-bg {
   background:
-    radial-gradient(ellipse 70% 45% at 15% -5%, rgba(255, 45, 146, 0.16), transparent 60%),
-    radial-gradient(ellipse 65% 40% at 90% 0%, rgba(34, 211, 238, 0.13), transparent 60%),
-    radial-gradient(ellipse 80% 55% at 50% 115%, rgba(167, 139, 250, 0.12), transparent 65%),
+    radial-gradient(ellipse 60% 38% at 12% -8%, rgba(244, 63, 142, 0.09), transparent 60%),
+    radial-gradient(ellipse 55% 34% at 95% -4%, rgba(56, 205, 236, 0.07), transparent 60%),
+    radial-gradient(ellipse 90% 50% at 50% 118%, rgba(139, 124, 246, 0.08), transparent 65%),
     var(--color-night);
 }
 
 .font-display {
   font-family: var(--font-display);
+}
+
+/* Sjednocené stavební prvky designu */
+.card {
+  border-radius: 1.25rem;
+  background: var(--color-panel);
+  border: 1px solid var(--color-line);
+  box-shadow: var(--shadow-card);
+}
+
+.field {
+  min-width: 0;
+  border-radius: 0.875rem;
+  border: 1px solid var(--color-line);
+  background: rgba(0, 0, 0, 0.35);
+  padding: 0.75rem 1rem;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.field::placeholder {
+  color: rgba(255, 255, 255, 0.28);
+}
+.field:focus {
+  border-color: rgba(56, 205, 236, 0.6);
+}
+
+.btn-primary {
+  border-radius: 0.875rem;
+  background: linear-gradient(100deg, var(--color-neon-pink), var(--color-neon-violet));
+  padding: 0.75rem 1.5rem;
+  font-weight: 700;
+  color: white;
+  box-shadow: var(--shadow-glow-pink);
+  transition: filter 0.15s, transform 0.1s;
+}
+.btn-primary:hover { filter: brightness(1.1); }
+.btn-primary:active { transform: scale(0.97); }
+
+.btn-secondary {
+  border-radius: 0.875rem;
+  border: 1px solid var(--color-line);
+  background: rgba(255, 255, 255, 0.04);
+  padding: 0.75rem 1.5rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.85);
+  transition: background 0.15s, transform 0.1s;
+}
+.btn-secondary:hover { background: rgba(255, 255, 255, 0.08); }
+.btn-secondary:active { transform: scale(0.97); }
+
+/* Malý nadpis sekce */
+.section-label {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.45);
 }
