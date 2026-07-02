@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { MicVocal, Users, Search, Play, Trophy } from 'lucide-react'
 import HomeScreen from './screens/HomeScreen.jsx'
 import PlayersScreen from './screens/PlayersScreen.jsx'
 import SearchScreen from './screens/SearchScreen.jsx'
@@ -11,11 +12,11 @@ import { absorbKeyFromUrl } from './lib/youtubeApi.js'
 absorbKeyFromUrl()
 
 const SCREENS = [
-  { id: 'home', label: 'Головна', icon: '🎤' },
-  { id: 'players', label: 'Гравці', icon: '🧑‍🤝‍🧑' },
-  { id: 'search', label: 'Пошук', icon: '🔍' },
-  { id: 'play', label: 'Співаємо', icon: '▶️' },
-  { id: 'results', label: 'Результати', icon: '🏆' },
+  { id: 'home', label: 'Головна', Icon: MicVocal },
+  { id: 'players', label: 'Гравці', Icon: Users },
+  { id: 'search', label: 'Пошук', Icon: Search },
+  { id: 'play', label: 'Співаємо', Icon: Play },
+  { id: 'results', label: 'Результати', Icon: Trophy },
 ]
 
 const saved = loadState()
@@ -68,8 +69,8 @@ export default function App() {
     setResults((list) => [...list, { id: nextId++, singerId, title, score }])
   }
 
-  function addPlayer(name, avatar, color) {
-    setPlayers((list) => [...list, { id: nextId++, name, avatar, color, songs: [] }])
+  function addPlayer(name, avatar, color, photo = null) {
+    setPlayers((list) => [...list, { id: nextId++, name, avatar, color, photo, songs: [] }])
   }
 
   function addPlayerSong(playerId, videoId, title) {
@@ -234,21 +235,27 @@ export default function App() {
         )}
       </main>
 
-      <nav className="flex shrink-0 justify-around gap-1 border-t border-white/10 bg-panel/80 px-1 pt-1.5 pb-[max(0.375rem,env(safe-area-inset-bottom))] backdrop-blur-md">
-        {SCREENS.map((item) => (
-          <button
-            key={item.id}
-            onClick={() => setScreen(item.id)}
-            className={`flex min-w-0 flex-col items-center gap-0.5 rounded-xl px-3 py-1.5 text-[11px] font-medium transition-all sm:flex-row sm:gap-2 sm:text-sm ${
-              screen === item.id
-                ? 'bg-neon-pink/15 text-neon-pink shadow-glow-pink'
-                : 'text-white/55 hover:bg-white/5 hover:text-white'
-            }`}
-          >
-            <span aria-hidden="true" className="text-lg sm:text-base">{item.icon}</span>
-            <span className="truncate">{item.label}</span>
-          </button>
-        ))}
+      <nav className="flex shrink-0 justify-around gap-1 border-t border-line bg-panel/85 px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur-md">
+        {SCREENS.map(({ id, label, Icon }) => {
+          const active = screen === id
+          return (
+            <button
+              key={id}
+              onClick={() => setScreen(id)}
+              className={`flex min-w-0 flex-col items-center gap-1 rounded-lg px-3 py-1 text-[10.5px] font-medium tracking-wide transition-colors sm:flex-row sm:gap-2 sm:text-sm ${
+                active ? 'text-white' : 'text-white/40 hover:text-white/75'
+              }`}
+            >
+              <Icon
+                size={20}
+                strokeWidth={active ? 2.2 : 1.8}
+                className={active ? 'text-neon-pink' : ''}
+                aria-hidden="true"
+              />
+              <span className="truncate">{label}</span>
+            </button>
+          )
+        })}
       </nav>
     </div>
   )

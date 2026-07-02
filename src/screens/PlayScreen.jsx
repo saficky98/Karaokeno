@@ -1,8 +1,10 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import confetti from 'canvas-confetti'
+import { Clapperboard, Languages, Mic, SkipForward, VideoOff, X } from 'lucide-react'
 import YouTubePlayer from '../components/YouTubePlayer.jsx'
 import VideoLinkForm from '../components/VideoLinkForm.jsx'
 import LiveScoreHUD from '../components/LiveScoreHUD.jsx'
+import Avatar from '../components/Avatar.jsx'
 import { requestMic, hasMic, startAnalysis } from '../lib/mic.js'
 import { ScoreEngine, scoreComment } from '../lib/scoring.js'
 
@@ -109,8 +111,10 @@ export default function PlayScreen({
   if (!nowPlaying) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4 p-6">
-        <p className="text-2xl">🎬</p>
-        <p className="text-center text-white/70">
+        <span className="flex h-14 w-14 items-center justify-center rounded-full bg-neon-violet/10 text-neon-violet">
+          <Clapperboard size={24} strokeWidth={1.8} />
+        </span>
+        <p className="max-w-md text-center text-sm text-white/55">
           Поки нічого не грає. Додай пісні до черги на головній — або просто встав посилання:
         </p>
         <div className="w-full max-w-xl">
@@ -124,12 +128,14 @@ export default function PlayScreen({
   if (micConsent === null) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-5 p-6 text-center">
-        <p className="text-5xl">🎙</p>
-        <h2 className="text-2xl font-black">Дозволиш мікрофон?</h2>
-        <p className="max-w-md text-white/70">
+        <span className="flex h-16 w-16 items-center justify-center rounded-full bg-neon-pink/10 text-neon-pink">
+          <Mic size={28} strokeWidth={1.8} />
+        </span>
+        <h2 className="font-display text-2xl font-bold">Дозволиш мікрофон?</h2>
+        <p className="max-w-md text-sm leading-relaxed text-white/65">
           Ми слухатимемо спів і рахуватимемо веселі бали: скільки співаєш, як тримаєш ноту і скільки
-          в тебе енергії. Звук <b>нікуди не записується і не надсилається</b> — все рахується прямо
-          на цьому пристрої.
+          в тебе енергії. Звук <b className="text-white/90">нікуди не записується і не надсилається</b> —
+          все рахується прямо на цьому пристрої.
         </p>
         <div className="flex flex-col gap-2 sm:flex-row">
           <button
@@ -142,14 +148,11 @@ export default function PlayScreen({
                 onMicConsent('off')
               }
             }}
-            className="rounded-2xl bg-neon-pink px-8 py-4 text-lg font-black text-white shadow-lg shadow-neon-pink/30 transition hover:brightness-110 active:scale-95"
+            className="btn-primary px-8 py-4 font-display text-base"
           >
-            Дозволити і співати 🎤
+            Дозволити і співати
           </button>
-          <button
-            onClick={() => onMicConsent('off')}
-            className="rounded-2xl border border-white/20 px-8 py-4 text-lg font-bold text-white/70 transition hover:bg-white/5"
-          >
+          <button onClick={() => onMicConsent('off')} className="btn-secondary px-8 py-4">
             Без балів
           </button>
         </div>
@@ -235,9 +238,9 @@ export default function PlayScreen({
       {!ended && playerError === null && !counting && !showLyrics && (
         <button
           onClick={() => setShowLyrics(true)}
-          className="absolute right-3 bottom-3 rounded-full bg-black/60 px-4 py-2 text-sm text-white/90 backdrop-blur transition hover:bg-black/80"
+          className="absolute right-3 bottom-3 flex items-center gap-1.5 rounded-full border border-line bg-black/60 px-4 py-2 text-sm text-white/85 backdrop-blur transition hover:bg-black/80"
         >
-          🔤 Текст
+          <Languages size={15} strokeWidth={1.8} /> Текст
         </button>
       )}
 
@@ -247,10 +250,10 @@ export default function PlayScreen({
 
       {singer && !ended && (
         <div
-          className="absolute top-3 left-3 flex items-center gap-2 rounded-full bg-black/60 px-3 py-1.5 text-sm backdrop-blur"
-          style={{ border: `1px solid ${singer.color}` }}
+          className="absolute top-3 left-3 flex items-center gap-2 rounded-full bg-black/60 py-1 pr-3.5 pl-1 text-sm backdrop-blur"
+          style={{ border: `1px solid ${singer.color}66` }}
         >
-          <span>{singer.avatar}</span>
+          <Avatar player={singer} size="sm" />
           <span className="max-w-32 truncate font-bold" style={{ color: singer.color }}>
             {singer.name}
           </span>
@@ -259,18 +262,17 @@ export default function PlayScreen({
 
       {playerError !== null && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-night/95 p-6 text-center">
-          <p className="text-2xl">😕</p>
-          <p className="max-w-md text-white/80">
+          <span className="flex h-14 w-14 items-center justify-center rounded-full bg-red-400/10 text-red-300">
+            <VideoOff size={24} strokeWidth={1.8} />
+          </span>
+          <p className="max-w-md text-sm text-white/70">
             {playerError === 101 || playerError === 150
               ? 'Це відео не можна відтворити поза YouTube (власник заборонив вбудовування). Спробуй інше караоке-відео.'
               : 'Не вдалося відтворити відео. Перевір посилання і спробуй ще раз.'}
           </p>
           {nextItem ? (
-            <button
-              onClick={goNext}
-              className="rounded-xl bg-neon-pink px-6 py-3 font-bold text-white transition hover:brightness-110 active:scale-95"
-            >
-              Наступна пісня ⏭
+            <button onClick={goNext} className="btn-primary flex items-center gap-2">
+              <SkipForward size={17} strokeWidth={2} /> Наступна пісня
             </button>
           ) : (
             <div className="w-full max-w-xl">
@@ -284,23 +286,27 @@ export default function PlayScreen({
       {ended && playerError === null && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-5 overflow-y-auto bg-night/95 p-6 text-center">
           {result && (
-            <div className="flex animate-pop-in flex-col items-center gap-1">
-              <p className="text-white/60">{singer ? `${singer.avatar} ${singer.name}` : 'Результат'}</p>
+            <div className="flex animate-pop-in flex-col items-center gap-1.5">
+              {singer && (
+                <div className="mb-1 flex items-center gap-2 text-white/60">
+                  <Avatar player={singer} size="sm" /> {singer.name}
+                </div>
+              )}
               <CountUpScore value={result.score} />
-              <p className="max-w-md text-lg text-white/80">{result.comment}</p>
+              <p className="max-w-md text-white/75">{result.comment}</p>
             </div>
           )}
 
           {leaderboard?.length > 0 && (
-            <div className="w-full max-w-sm rounded-2xl bg-panel p-4 text-left">
-              <p className="mb-2 text-sm font-bold text-white/60">🏆 Рейтинг вечірки</p>
-              <ol className="flex flex-col gap-1">
+            <div className="card w-full max-w-sm p-4 text-left">
+              <p className="section-label mb-2.5">Рейтинг вечірки</p>
+              <ol className="flex flex-col gap-2">
                 {leaderboard.slice(0, 3).map((entry, index) => (
-                  <li key={entry.player.id} className="flex items-center gap-2">
-                    <span className="w-6">{['🥇', '🥈', '🥉'][index]}</span>
-                    <span className="text-lg">{entry.player.avatar}</span>
-                    <span className="flex-1 truncate font-bold">{entry.player.name}</span>
-                    <span className="font-mono text-neon-cyan tabular-nums">{entry.total.toLocaleString('uk-UA')}</span>
+                  <li key={entry.player.id} className="flex items-center gap-2.5">
+                    <span className="w-5 text-center text-sm font-bold text-white/40 tabular-nums">{index + 1}</span>
+                    <Avatar player={entry.player} size="sm" />
+                    <span className="flex-1 truncate text-sm font-bold">{entry.player.name}</span>
+                    <span className="text-sm text-neon-cyan tabular-nums">{entry.total.toLocaleString('uk-UA')}</span>
                   </li>
                 ))}
               </ol>
@@ -310,30 +316,27 @@ export default function PlayScreen({
           {nextItem ? (
             <>
               <div className="flex items-center gap-3">
-                {nextItem.singer && <span className="text-4xl">{nextItem.singer.avatar}</span>}
+                {nextItem.singer && <Avatar player={nextItem.singer} size="lg" />}
                 <div className="text-left">
-                  <p className="text-sm text-white/60">Далі співає:</p>
+                  <p className="section-label">Далі співає</p>
                   {nextItem.singer && (
-                    <p className="text-2xl font-black" style={{ color: nextItem.singer.color }}>
+                    <p className="font-display text-xl font-bold" style={{ color: nextItem.singer.color }}>
                       {nextItem.singer.name}
                     </p>
                   )}
-                  <p className="max-w-60 truncate text-white/70">{nextItem.title || 'Наступна пісня з черги'}</p>
+                  <p className="max-w-60 truncate text-sm text-white/60">{nextItem.title || 'Наступна пісня з черги'}</p>
                 </div>
               </div>
-              <button
-                onClick={goNext}
-                className="rounded-2xl bg-neon-pink px-8 py-4 text-xl font-black text-white shadow-lg shadow-neon-pink/30 transition hover:brightness-110 active:scale-95"
-              >
-                Вдуй! 🎤
+              <button onClick={goNext} className="btn-primary flex items-center gap-2.5 px-8 py-4 font-display text-base">
+                <Mic size={19} strokeWidth={2} /> Вдуй!
               </button>
             </>
           ) : (
             <>
-              <p className="max-w-md text-white/80">Черга порожня. Додай ще пісень — вечірка тільки починається! 🎉</p>
+              <p className="max-w-md text-sm text-white/70">Черга порожня. Додай ще пісень — вечірка тільки починається!</p>
               <button
                 onClick={() => { setEnded(false); setResult(null); onExit(); onGoHome() }}
-                className="rounded-xl bg-neon-cyan px-6 py-3 font-bold text-night transition hover:brightness-110 active:scale-95"
+                className="btn-primary"
               >
                 На головну
               </button>
@@ -345,9 +348,9 @@ export default function PlayScreen({
       {!ended && (
         <button
           onClick={onExit}
-          className="absolute top-3 right-3 rounded-full bg-black/60 px-4 py-2 text-sm text-white/90 backdrop-blur transition hover:bg-black/80"
+          className="absolute top-3 right-3 flex items-center gap-1.5 rounded-full border border-line bg-black/60 px-4 py-2 text-sm text-white/85 backdrop-blur transition hover:bg-black/80"
         >
-          ✕ Вийти
+          <X size={15} strokeWidth={2} /> Вийти
         </button>
       )}
     </div>
