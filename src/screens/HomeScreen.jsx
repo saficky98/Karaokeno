@@ -16,6 +16,8 @@ export default function HomeScreen({
   onClearQueue,
   onResetGame,
   onEnqueueAllPlayerSongs,
+  micConsent,
+  onResetMicConsent,
 }) {
   const songbookCount = players.reduce((sum, p) => sum + (p.songs?.length ?? 0), 0)
   return (
@@ -79,13 +81,15 @@ export default function HomeScreen({
           onGoToPlayers={onGoToPlayers}
           onClearQueue={onClearQueue}
           onResetGame={onResetGame}
+          micConsent={micConsent}
+          onResetMicConsent={onResetMicConsent}
         />
       </div>
     </div>
   )
 }
 
-function Settings({ hasPlayers, hasQueue, onGoToPlayers, onClearQueue, onResetGame }) {
+function Settings({ hasPlayers, hasQueue, onGoToPlayers, onClearQueue, onResetGame, micConsent, onResetMicConsent }) {
   const [open, setOpen] = useState(false)
   const [confirmReset, setConfirmReset] = useState(false)
 
@@ -115,6 +119,23 @@ function Settings({ hasPlayers, hasQueue, onGoToPlayers, onClearQueue, onResetGa
             🗑 Очистити чергу
           </button>
           <KeyStatus />
+          <div className="flex items-center justify-between gap-2 rounded-xl border border-white/15 px-4 py-3 text-sm">
+            <span className="text-white/80">
+              🎙 Бали за спів:{' '}
+              {micConsent === 'on' ? (
+                <span className="text-neon-lime">увімкнено ✓</span>
+              ) : micConsent === 'off' ? (
+                <span className="text-white/50">вимкнено</span>
+              ) : (
+                <span className="text-white/50">спитаємо перед піснею</span>
+              )}
+            </span>
+            {micConsent !== null && (
+              <button onClick={onResetMicConsent} className="text-white/50 underline-offset-2 hover:underline">
+                змінити
+              </button>
+            )}
+          </div>
           {confirmReset ? (
             <div className="flex flex-col gap-2 rounded-xl border border-red-400/40 p-3">
               <p className="text-sm text-white/80">Точно скинути все? Гравці та черга зникнуть.</p>
