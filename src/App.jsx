@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { MicVocal, Users, Search, Play, Trophy } from 'lucide-react'
 import HomeScreen from './screens/HomeScreen.jsx'
 import PlayersScreen from './screens/PlayersScreen.jsx'
@@ -6,11 +6,17 @@ import SearchScreen from './screens/SearchScreen.jsx'
 import PlayScreen from './screens/PlayScreen.jsx'
 import ResultsScreen from './screens/ResultsScreen.jsx'
 import { loadState, saveState, clearState } from './lib/storage.js'
-import { absorbKeyFromUrl } from './lib/youtubeApi.js'
+import { absorbKeyFromUrl, getApiKey } from './lib/youtubeApi.js'
 import { LangProvider, translate } from './lib/i18n.jsx'
+import { absorbRoomFromUrl, storedGuestRoom, clearGuestRoom } from './lib/roomLink.js'
+
+// Obrazovka hosta (a MQTT knihovna) se stahuje jen, když je potřeba.
+const GuestApp = lazy(() => import('./screens/GuestApp.jsx'))
 
 // Aktivační odkaz #k=… zpracujeme hned při startu, ať klíč nezůstane v adrese.
 absorbKeyFromUrl()
+// Odkaz místnosti #r=… (host klepl na pozvánku)
+const roomFromUrl = absorbRoomFromUrl()
 
 const SCREENS = [
   { id: 'home', labelKey: 'nav_home', Icon: MicVocal },
@@ -26,7 +32,8 @@ const saved = loadState()
 // Starší uložené hry nemají osobní playlisty — doplníme prázdné.
 const savedPlayers = (saved?.players ?? []).map((p) => ({ ...p, songs: p.songs ?? [] }))
 
-// Čítač ID navazuje za nejvyšší uložené ID, aby po obnovení stránky nevznikaly duplicity.
+// Čítač ID navazuje za nejvyšší uložené ID, aby po obnovení stránky nevznikaly
+// duplicity. Hosté z místnosti mají textová ID — ta přeskakujeme.
 let nextId =
   Math.max(
     0,
@@ -35,7 +42,9 @@ let nextId =
       ...(saved?.queue ?? []),
       ...(saved?.results ?? []),
       ...savedPlayers.flatMap((p) => p.songs),
-    ].map((item) => item.id),
+    ]
+      .map((item) => item.id)
+      .filter((id) => typeof id === 'number'),
   ) + 1
 
 // Písnička rozehraná před obnovením stránky se vrátí na začátek fronty.
@@ -44,6 +53,21 @@ const initialQueue = saved?.nowPlaying
   : (saved?.queue ?? [])
 
 export default function App() {
+  // Zařízení hosta: otevřelo pozvánku do cizí místnosti → zjednodušená appka.
+  const guestRoom = roomFromUrl ?? storedGuestRoom()
+  if (guestRoom && guestRoom.id !== saved?.room?.id) {
+    return (
+      <Suspense fallback={<div className="party-bg h-full" />}>
+        <GuestApp room={guestRoom} />
+      </Suspense>
+    )
+  }
+  if (guestRoom && guestRoom.id === saved?.room?.id) clearGuestRoom()
+
+  return <HostApp />
+}
+
+function HostApp() {
   const [screen, setScreen] = useState('home')
   const [players, setPlayers] = useState(savedPlayers)
   const [queue, setQueue] = useState(initialQueue)
@@ -52,10 +76,102 @@ export default function App() {
   const [results, setResults] = useState(saved?.results ?? [])
   const [micConsent, setMicConsent] = useState(saved?.micConsent ?? null)
   const [lang, setLang] = useState(saved?.lang ?? 'uk')
+  // Sdílená místnost: {id, secret} nebo null
+  const [room, setRoom] = useState(saved?.room ?? null)
+  const [roomStatus, setRoomStatus] = useState('connecting')
+  const [usedGuestSongs, setUsedGuestSongs] = useState(saved?.usedGuestSongs ?? [])
+  const roomApiRef = useRef(null)
+  const usedGuestSongsRef = useRef(usedGuestSongs)
+  usedGuestSongsRef.current = usedGuestSongs
 
   useEffect(() => {
-    saveState({ players, queue, nowPlaying, results, micConsent, lang })
-  }, [players, queue, nowPlaying, results, micConsent, lang])
+    saveState({ players, queue, nowPlaying, results, micConsent, lang, room, usedGuestSongs })
+  }, [players, queue, nowPlaying, results, micConsent, lang, room, usedGuestSongs])
+
+  // Připojení místnosti (hostitel): posloucháme příspěvky hostů.
+  useEffect(() => {
+    if (!room) return
+    let disposed = false
+    let api = null
+    import('./lib/room.js').then(async ({ connectRoom }) => {
+      api = await connectRoom({
+        roomId: room.id,
+        secret: room.secret,
+        role: 'host',
+        onGuest: applyGuestUpdate,
+        onStatus: setRoomStatus,
+      })
+      if (disposed) {
+        api.end()
+        return
+      }
+      roomApiRef.current = api
+    })
+    return () => {
+      disposed = true
+      api?.end()
+      roomApiRef.current = null
+    }
+  }, [room?.id])
+
+  // Hostitel po každé změně publikuje zašifrovaný snímek místnosti.
+  useEffect(() => {
+    if (!room) return
+    roomApiRef.current?.publishRoom({
+      players: players.map((p) => ({ ...p, songs: undefined, songsCount: p.songs.length })),
+      queue,
+      results,
+      nowPlaying: nowPlaying ? { title: nowPlaying.title, singerId: nowPlaying.singerId } : null,
+      apiKey: getApiKey(),
+    })
+  }, [players, queue, results, nowPlaying, room, roomStatus])
+
+  // Příspěvek hosta: jeho profil + písničky se stanou hráčem s playlistem.
+  function applyGuestUpdate(guestId, data) {
+    const id = `g-${guestId}`
+    setPlayers((list) => {
+      if (!data?.player?.name) return list.filter((p) => p.id !== id)
+      const used = new Set(usedGuestSongsRef.current)
+      const merged = {
+        id,
+        guestId,
+        name: data.player.name,
+        avatar: data.player.avatar ?? '🎤',
+        color: data.player.color ?? '#38cdec',
+        photo: data.player.photo ?? null,
+        songs: (data.songs ?? [])
+          .map((s) => ({ id: `${id}-${s.id}`, videoId: s.videoId, title: s.title ?? null }))
+          .filter((s) => !used.has(s.id)),
+      }
+      const index = list.findIndex((p) => p.id === id)
+      if (index >= 0) {
+        const copy = [...list]
+        copy[index] = merged
+        return copy
+      }
+      return [...list, merged]
+    })
+  }
+
+  // Písničky hostů si pamatujeme jako použité, aby se po zařazení do fronty
+  // nevracely do playlistu s další aktualizací od hosta.
+  function markGuestSongsUsed(ids) {
+    const guestIds = ids.filter((sid) => typeof sid === 'string')
+    if (guestIds.length > 0) setUsedGuestSongs((list) => [...list, ...guestIds])
+  }
+
+  function createRoom() {
+    import('./lib/roomCrypto.js').then(({ generateRoomId, generateRoomSecret }) => {
+      setRoomStatus('connecting')
+      setRoom({ id: generateRoomId(), secret: generateRoomSecret() })
+    })
+  }
+
+  function closeRoom() {
+    roomApiRef.current?.clearRoom()
+    // dáme klientovi chvilku zprávu odeslat, pak spojení ukončí cleanup efektu
+    setTimeout(() => setRoom(null), 400)
+  }
 
   useEffect(() => {
     document.documentElement.lang = lang === 'cs' ? 'cs' : 'uk'
@@ -98,7 +214,8 @@ export default function App() {
     const song = player?.songs.find((s) => s.id === songId)
     if (!song) return
     removePlayerSong(playerId, songId)
-    addSong(song.videoId, song.title, playerId)
+    markGuestSongsUsed([song.id])
+    setQueue((list) => [...list, { id: typeof song.id === 'string' ? song.id : nextId++, videoId: song.videoId, title: song.title, singerId: playerId }])
   }
 
   // Naskládá osobní playlisty všech hráčů do fronty — férově se střídají.
@@ -117,6 +234,7 @@ export default function App() {
       }
     }
     if (additions.length === 0) return
+    markGuestSongsUsed(additions.map((a) => a.id))
     setPlayers(remaining)
     setQueue((q) => [...q, ...additions])
   }
@@ -174,10 +292,12 @@ export default function App() {
   }
 
   function resetGame() {
+    if (room) closeRoom()
     setPlayers([])
     setQueue([])
     setNowPlaying(null)
     setResults([])
+    setUsedGuestSongs([])
     clearState()
     setScreen('home')
   }
@@ -204,6 +324,11 @@ export default function App() {
             onEnqueueAllPlayerSongs={enqueueAllPlayerSongs}
             micConsent={micConsent}
             onResetMicConsent={() => setMicConsent(null)}
+            room={room}
+            roomStatus={roomStatus}
+            guestCount={players.filter((p) => p.guestId).length}
+            onCreateRoom={createRoom}
+            onCloseRoom={closeRoom}
           />
         )}
         {screen === 'players' && (
