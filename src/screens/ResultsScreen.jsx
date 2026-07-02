@@ -1,16 +1,18 @@
 import { Trophy } from 'lucide-react'
 import Avatar from '../components/Avatar.jsx'
+import { useLang, pluralSongs } from '../lib/i18n.jsx'
 
 export default function ResultsScreen({ leaderboard, results, players }) {
+  const { t, lang } = useLang()
   if (results.length === 0) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4 p-6 text-center">
         <span className="flex h-14 w-14 items-center justify-center rounded-full bg-neon-pink/10 text-neon-pink">
           <Trophy size={24} strokeWidth={1.8} />
         </span>
-        <h2 className="font-display text-xl font-bold">Результати</h2>
+        <h2 className="font-display text-xl font-bold">{t('nav_results')}</h2>
         <p className="max-w-sm text-sm text-white/55">
-          Поки що порожньо. Заспівай першу пісню з увімкненим мікрофоном — і тут з’явиться рейтинг!
+          {t('results_empty')}
         </p>
       </div>
     )
@@ -26,8 +28,8 @@ export default function ResultsScreen({ leaderboard, results, players }) {
     <div className="h-full overflow-y-auto">
       <div className="mx-auto flex max-w-xl flex-col gap-6 p-6">
         <div>
-          <h2 className="font-display text-2xl font-bold">Рейтинг вечірки</h2>
-          <p className="mt-1 text-sm text-white/55">Сума балів за всі заспівані пісні.</p>
+          <h2 className="font-display text-2xl font-bold">{t('party_rating')}</h2>
+          <p className="mt-1 text-sm text-white/55">{t('results_sub')}</p>
         </div>
 
         <ol className="flex flex-col gap-2">
@@ -47,7 +49,7 @@ export default function ResultsScreen({ leaderboard, results, players }) {
               <div className="min-w-0 flex-1">
                 <p className="truncate font-bold">{entry.player.name}</p>
                 <p className="text-xs text-white/45">
-                  {entry.songs} {entry.songs === 1 ? 'пісня' : entry.songs < 5 ? 'пісні' : 'пісень'}
+                  {entry.songs} {pluralSongs(entry.songs, lang)}
                 </p>
               </div>
               <span className="font-display text-lg font-bold text-neon-cyan tabular-nums">
@@ -58,7 +60,7 @@ export default function ResultsScreen({ leaderboard, results, players }) {
         </ol>
 
         <section>
-          <p className="section-label mb-2">Останні виступи</p>
+          <p className="section-label mb-2">{t('last_performances')}</p>
           <ul className="flex flex-col gap-1.5">
             {[...results].reverse().slice(0, 15).map((entry) => {
               const singer = players.find((p) => p.id === entry.singerId)
@@ -68,7 +70,7 @@ export default function ResultsScreen({ leaderboard, results, players }) {
                   <span className="shrink-0 font-bold" style={{ color: singer?.color }}>
                     {singer?.name ?? '—'}
                   </span>
-                  <span className="min-w-0 flex-1 truncate text-white/50">{entry.title || 'Пісня'}</span>
+                  <span className="min-w-0 flex-1 truncate text-white/50">{entry.title || t('a_song')}</span>
                   <span className="text-neon-cyan tabular-nums">{entry.score.toLocaleString('uk-UA')}</span>
                 </li>
               )

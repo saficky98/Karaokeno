@@ -1,0 +1,284 @@
+import { createContext, useContext } from 'react'
+
+// Jednoduchá dvoujazyčnost: ukrajinština (výchozí) a čeština.
+// Slogan zůstává ukrajinsky v obou jazycích — přání zadavatele.
+
+const STR = {
+  uk: {
+    nav_home: 'Головна',
+    nav_players: 'Гравці',
+    nav_search: 'Пошук',
+    nav_play: 'Співаємо',
+    nav_results: 'Результати',
+
+    tagline: 'Збирай бали, коли всі задовбали',
+    need_players_first: 'Спочатку додай гравців — хто сьогодні співає?',
+    need_two_players: 'Потрібно щонайменше двоє гравців.',
+    add_players_btn: 'Додати гравців',
+    add_song_label: 'Додати пісню',
+    link_placeholder: 'Посилання на YouTube…',
+    title_placeholder: 'Назва пісні (необов’язково)',
+    to_queue: 'До черги',
+    queue_label: 'Черга',
+    queue_empty: 'Черга порожня — додай першу пісню.',
+    song_n: 'Пісня №{n}',
+    dump_songbooks: 'Висипати пісні гравців у чергу ({n})',
+    start_party: 'Почати вечірку',
+    quick_play: 'Просто увімкнути відео без черги',
+    settings: 'Налаштування',
+    change_players: 'Змінити гравців',
+    clear_queue: 'Очистити чергу',
+    lang_label: 'Мова застосунку',
+    yt_search_label: 'Пошук YouTube:',
+    activated: 'активовано',
+    not_activated: 'не активовано',
+    change_key: 'змінити ключ',
+    enter_key: 'ввести ключ',
+    mic_label: 'Бали за спів:',
+    mic_on: 'увімкнено',
+    mic_off: 'вимкнено',
+    mic_ask: 'спитаємо перед піснею',
+    change: 'змінити',
+    reset_game: 'Скинути всю гру',
+    reset_confirm: 'Точно скинути все? Гравці, черга і бали зникнуть.',
+    yes_reset: 'Так, скинути',
+    no: 'Ні',
+
+    players_sub: 'Від 2 до 8 гравців — співатимете по черзі.',
+    name_placeholder: 'Ім’я гравця',
+    avatar_label: 'Аватар',
+    upload_photo: 'Завантажити фото',
+    photo_note: 'Фото зберігається лише на цьому пристрої.',
+    add_player: 'Додати гравця',
+    err_name: 'Напиши ім’я гравця.',
+    err_dup: 'Гравець з таким ім’ям вже є.',
+    err_max: 'Максимум {n} гравців.',
+    err_photo: 'Це фото не вдалося завантажити — спробуй інше.',
+    roster: 'Склад вечірки',
+    no_players_yet: 'Поки що нікого немає. Хто перший?',
+    one_more: 'Додай ще хоча б одного — самому співати сумно.',
+    songbook_note: 'Особисті пісні гравця {name} — потім одним натиском підуть у чергу.',
+    delete_player: 'Видалити гравця {name}',
+    delete_song: 'Видалити пісню',
+
+    search_sub_original: 'Знайдемо оригінальний кліп — текст покажемо прямо в застосунку.',
+    search_sub_karaoke: 'Напиши назву — «караоке» додамо самі.',
+    mode_original: 'Оригінал',
+    mode_karaoke: 'Караоке',
+    sings: 'Співає',
+    added_to_queue: '«{title}» — до черги для {name}',
+    a_song: 'Пісня',
+    search_placeholder: 'Назва пісні або виконавець…',
+    searching: 'Шукаю…',
+    no_results: 'Нічого не знайшлося. Спробуй іншу назву або додай посиланням нижче.',
+    link_fallback: '…або встав посилання на YouTube',
+    err_quota: 'Денний ліміт пошуку YouTube вичерпано. Додай пісню посиланням нижче — це працює завжди.',
+    err_key: 'Пошук не працює: ключ YouTube не приймається. Додай пісню посиланням нижче, а хазяїну вечірки скажи перевірити ключ у Налаштуваннях.',
+    err_network: 'Не вдалося зʼєднатися з YouTube. Перевір інтернет і спробуй ще раз.',
+    no_key_title: 'Пошук на цьому пристрої ще не активовано.',
+    no_key_hint: 'Хазяїн вечірки має відкрити спеціальне посилання-активатор — або встав ключ YouTube API сюди:',
+    save: 'Зберегти',
+    err_link: 'Це не схоже на посилання YouTube. Скопіюй повну адресу відео, наприклад https://www.youtube.com/watch?v=…',
+    err_link_short: 'Це не схоже на посилання YouTube.',
+    play_btn: 'Грати',
+    add: 'Додати',
+
+    nothing_playing: 'Поки нічого не грає. Додай пісні до черги на головній — або просто встав посилання:',
+    mic_q: 'Дозволиш мікрофон?',
+    mic_explain_1: 'Ми слухатимемо спів і рахуватимемо веселі бали: скільки співаєш, як тримаєш ноту і скільки в тебе енергії. Звук ',
+    mic_explain_bold: 'нікуди не записується і не надсилається',
+    mic_explain_2: ' — все рахується прямо на цьому пристрої.',
+    allow_sing: 'Дозволити і співати',
+    no_scores: 'Без балів',
+    loading_video: 'Завантажую відео…',
+    lyrics_btn: 'Текст',
+    unmute: 'Увімкнути звук',
+    err_embed: 'Це відео не можна відтворити поза YouTube (власник заборонив вбудовування). Спробуй інше караоке-відео.',
+    err_video: 'Не вдалося відтворити відео. Перевір посилання і спробуй ще раз.',
+    next_song: 'Наступна пісня',
+    party_rating: 'Рейтинг вечірки',
+    next_sings: 'Далі співає',
+    next_from_queue: 'Наступна пісня з черги',
+    vdui_btn: 'Вдуй!',
+    queue_done: 'Черга порожня. Додай ще пісень — вечірка тільки починається!',
+    go_home: 'На головну',
+    exit: 'Вийти',
+    result: 'Результат',
+
+    results_sub: 'Сума балів за всі заспівані пісні.',
+    results_empty: 'Поки що порожньо. Заспівай першу пісню з увімкненим мікрофоном — і тут з’явиться рейтинг!',
+    last_performances: 'Останні виступи',
+
+    lyrics_title: 'Текст пісні',
+    lyrics_loading: 'Шукаю текст пісні…',
+    lyrics_empty: 'Текст не знайшовся (шукаємо за назвою відео — вона буває неточна).',
+    lyrics_close: 'Закрити текст',
+
+    comment_0: 'Тихенько, але з душею! Мікрофон тебе майже почув',
+    comment_1: 'Головне — сміливість! Наступна пісня твоя',
+    comment_2: 'Розігрів зараховано! Далі буде тільки краще',
+    comment_3: 'Солідно! Душа співала — і це було чутно',
+    comment_4: 'Вогонь! Сусіди вже підспівують',
+    comment_5: 'Зірка вечірки! Хтось викликав продюсера?',
+    comment_6: 'ЛЕГЕНДА! Мікрофон плаче від щастя',
+  },
+
+  cs: {
+    nav_home: 'Domů',
+    nav_players: 'Hráči',
+    nav_search: 'Hledání',
+    nav_play: 'Zpíváme',
+    nav_results: 'Výsledky',
+
+    tagline: 'Збирай бали, коли всі задовбали',
+    need_players_first: 'Nejdřív přidej hráče — kdo dnes zpívá?',
+    need_two_players: 'Potřebujete aspoň dva hráče.',
+    add_players_btn: 'Přidat hráče',
+    add_song_label: 'Přidat písničku',
+    link_placeholder: 'Odkaz na YouTube…',
+    title_placeholder: 'Název písničky (nepovinné)',
+    to_queue: 'Do fronty',
+    queue_label: 'Fronta',
+    queue_empty: 'Fronta je prázdná — přidej první písničku.',
+    song_n: 'Písnička č. {n}',
+    dump_songbooks: 'Nasypat písničky hráčů do fronty ({n})',
+    start_party: 'Spustit párty',
+    quick_play: 'Jen přehrát video bez fronty',
+    settings: 'Nastavení',
+    change_players: 'Upravit hráče',
+    clear_queue: 'Vyčistit frontu',
+    lang_label: 'Jazyk aplikace',
+    yt_search_label: 'Vyhledávání YouTube:',
+    activated: 'aktivováno',
+    not_activated: 'neaktivováno',
+    change_key: 'změnit klíč',
+    enter_key: 'vložit klíč',
+    mic_label: 'Body za zpěv:',
+    mic_on: 'zapnuto',
+    mic_off: 'vypnuto',
+    mic_ask: 'zeptáme se před písničkou',
+    change: 'změnit',
+    reset_game: 'Resetovat celou hru',
+    reset_confirm: 'Opravdu všechno smazat? Hráči, fronta i body zmizí.',
+    yes_reset: 'Ano, smazat',
+    no: 'Ne',
+
+    players_sub: '2 až 8 hráčů — budete se u mikrofonu střídat.',
+    name_placeholder: 'Jméno hráče',
+    avatar_label: 'Avatar',
+    upload_photo: 'Nahrát fotku',
+    photo_note: 'Fotka se ukládá jen v tomto zařízení.',
+    add_player: 'Přidat hráče',
+    err_name: 'Napiš jméno hráče.',
+    err_dup: 'Hráč s tímto jménem už existuje.',
+    err_max: 'Maximálně {n} hráčů.',
+    err_photo: 'Tuhle fotku se nepodařilo načíst — zkus jinou.',
+    roster: 'Sestava párty',
+    no_players_yet: 'Zatím tu nikdo není. Kdo bude první?',
+    one_more: 'Přidej aspoň ještě jednoho — sólo se zpívá smutně.',
+    songbook_note: 'Osobní písničky hráče {name} — pak je jedním klepnutím pošleš do fronty.',
+    delete_player: 'Smazat hráče {name}',
+    delete_song: 'Smazat písničku',
+
+    search_sub_original: 'Najdeme originální klip — text ukážeme přímo v aplikaci.',
+    search_sub_karaoke: 'Napiš název — „karaoke“ přidáme sami.',
+    mode_original: 'Originál',
+    mode_karaoke: 'Karaoke',
+    sings: 'Zpívá',
+    added_to_queue: '„{title}“ — do fronty pro {name}',
+    a_song: 'Písnička',
+    search_placeholder: 'Název písničky nebo interpret…',
+    searching: 'Hledám…',
+    no_results: 'Nic se nenašlo. Zkus jiný název, nebo přidej písničku odkazem níž.',
+    link_fallback: '…nebo vlož odkaz na YouTube',
+    err_quota: 'Denní limit vyhledávání YouTube je vyčerpaný. Přidej písničku odkazem níž — to funguje vždycky.',
+    err_key: 'Vyhledávání nefunguje: YouTube klíč není přijímán. Přidej písničku odkazem níž a řekni pořadateli, ať zkontroluje klíč v Nastavení.',
+    err_network: 'Nepodařilo se spojit s YouTube. Zkontroluj internet a zkus to znovu.',
+    no_key_title: 'Vyhledávání na tomto zařízení ještě není aktivované.',
+    no_key_hint: 'Pořadatel párty má otevřít speciální aktivační odkaz — nebo sem vlož YouTube API klíč:',
+    save: 'Uložit',
+    err_link: 'Tohle nevypadá jako odkaz na YouTube. Zkopíruj celou adresu videa, např. https://www.youtube.com/watch?v=…',
+    err_link_short: 'Tohle nevypadá jako odkaz na YouTube.',
+    play_btn: 'Přehrát',
+    add: 'Přidat',
+
+    nothing_playing: 'Zatím nic nehraje. Přidej písničky do fronty na hlavní stránce — nebo prostě vlož odkaz:',
+    mic_q: 'Povolíš mikrofon?',
+    mic_explain_1: 'Budeme poslouchat zpěv a počítat zábavné body: kolik zpíváš, jak držíš tón a kolik máš energie. Zvuk se ',
+    mic_explain_bold: 'nikam nenahrává ani neodesílá',
+    mic_explain_2: ' — všechno se počítá přímo v tomhle zařízení.',
+    allow_sing: 'Povolit a zpívat',
+    no_scores: 'Bez bodů',
+    loading_video: 'Načítám video…',
+    lyrics_btn: 'Text',
+    unmute: 'Zapnout zvuk',
+    err_embed: 'Tohle video nejde přehrát mimo YouTube (majitel zakázal vkládání). Zkus jiné video.',
+    err_video: 'Video se nepodařilo přehrát. Zkontroluj odkaz a zkus to znovu.',
+    next_song: 'Další písnička',
+    party_rating: 'Žebříček párty',
+    next_sings: 'Další zpívá',
+    next_from_queue: 'Další písnička z fronty',
+    vdui_btn: 'Вдуй!',
+    queue_done: 'Fronta je prázdná. Přidej další písničky — párty teprve začíná!',
+    go_home: 'Na hlavní stránku',
+    exit: 'Ukončit',
+    result: 'Výsledek',
+
+    results_sub: 'Součet bodů za všechny zazpívané písničky.',
+    results_empty: 'Zatím prázdno. Zazpívej první písničku se zapnutým mikrofonem — a objeví se tu žebříček!',
+    last_performances: 'Poslední vystoupení',
+
+    lyrics_title: 'Text písničky',
+    lyrics_loading: 'Hledám text písničky…',
+    lyrics_empty: 'Text se nenašel (hledáme podle názvu videa — ten bývá nepřesný).',
+    lyrics_close: 'Zavřít text',
+
+    comment_0: 'Potichoučku, ale s duší! Mikrofon tě skoro slyšel',
+    comment_1: 'Hlavní je odvaha! Další písnička je tvoje',
+    comment_2: 'Rozehřátí se počítá! Dál to bude jen lepší',
+    comment_3: 'Solidní! Duše zpívala — a bylo to slyšet',
+    comment_4: 'Pecka! Sousedi už zpívají s tebou',
+    comment_5: 'Hvězda večera! Nevolal někdo producenta?',
+    comment_6: 'LEGENDA! Mikrofon pláče štěstím',
+  },
+}
+
+export function translate(lang, key, vars) {
+  let text = STR[lang]?.[key] ?? STR.uk[key] ?? key
+  if (vars) {
+    for (const [name, value] of Object.entries(vars)) {
+      text = text.replaceAll(`{${name}}`, String(value))
+    }
+  }
+  return text
+}
+
+const LangContext = createContext(null)
+
+export function LangProvider({ lang, setLang, children }) {
+  const t = (key, vars) => translate(lang, key, vars)
+  return <LangContext.Provider value={{ lang, setLang, t }}>{children}</LangContext.Provider>
+}
+
+export function useLang() {
+  return useContext(LangContext)
+}
+
+// 1 pisen / 2 pisne / 5 pisni — v obou jazycích stejná pravidla (1 / 2–4 / 5+)
+export function pluralSongs(n, lang) {
+  const forms = lang === 'cs' ? ['píseň', 'písně', 'písní'] : ['пісня', 'пісні', 'пісень']
+  if (n === 1) return forms[0]
+  if (n >= 2 && n <= 4) return forms[1]
+  return forms[2]
+}
+
+// Klíč vtipného komentáře podle pásma skóre
+export function commentKey(score) {
+  if (score >= 9000) return 'comment_6'
+  if (score >= 7500) return 'comment_5'
+  if (score >= 6000) return 'comment_4'
+  if (score >= 4000) return 'comment_3'
+  if (score >= 2000) return 'comment_2'
+  if (score >= 500) return 'comment_1'
+  return 'comment_0'
+}

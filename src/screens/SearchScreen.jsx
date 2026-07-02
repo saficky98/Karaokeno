@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { Check, Users } from 'lucide-react'
 import SongPicker from '../components/SongPicker.jsx'
+import { useLang } from '../lib/i18n.jsx'
 
 export default function SearchScreen({ players, queueLength, onAddSong, onGoToPlayers }) {
+  const { t } = useLang()
   const defaultSingerId = players.length > 0 ? players[queueLength % players.length].id : null
   const [singerId, setSingerId] = useState(null)
   const [added, setAdded] = useState(null)
@@ -13,8 +15,8 @@ export default function SearchScreen({ players, queueLength, onAddSong, onGoToPl
         <span className="flex h-14 w-14 items-center justify-center rounded-full bg-neon-cyan/10 text-neon-cyan">
           <Users size={24} strokeWidth={1.8} />
         </span>
-        <p className="max-w-sm text-sm text-white/55">Спочатку додай гравців — потім знайдемо, що вони співатимуть.</p>
-        <button onClick={onGoToPlayers} className="btn-primary">Додати гравців</button>
+        <p className="max-w-sm text-sm text-white/55">{t('need_players_first')}</p>
+        <button onClick={onGoToPlayers} className="btn-primary">{t('add_players_btn')}</button>
       </div>
     )
   }
@@ -23,7 +25,7 @@ export default function SearchScreen({ players, queueLength, onAddSong, onGoToPl
     const chosen = singerId ?? defaultSingerId
     onAddSong(song.videoId, song.title, chosen)
     const singer = players.find((p) => p.id === chosen)
-    setAdded(`«${song.title ?? 'Пісня'}» — до черги для ${singer?.name ?? '…'}`)
+    setAdded(t('added_to_queue', { title: song.title ?? t('a_song'), name: singer?.name ?? '…' }))
     setSingerId(null)
     setTimeout(() => setAdded(null), 3000)
   }
@@ -32,12 +34,11 @@ export default function SearchScreen({ players, queueLength, onAddSong, onGoToPl
     <div className="h-full overflow-y-auto">
       <div className="mx-auto flex max-w-xl flex-col gap-4 p-6">
         <div>
-          <h2 className="font-display text-2xl font-bold">Пошук</h2>
-          <p className="mt-1 text-sm text-white/55">Напиши назву — «караоке» додамо самі.</p>
+          <h2 className="font-display text-2xl font-bold">{t('nav_search')}</h2>
         </div>
 
         <label className="card flex items-center gap-3 px-4 py-3">
-          <span className="section-label shrink-0">Співає</span>
+          <span className="section-label shrink-0">{t('sings')}</span>
           <select
             value={singerId ?? defaultSingerId}
             onChange={(event) => setSingerId(Number(event.target.value))}
