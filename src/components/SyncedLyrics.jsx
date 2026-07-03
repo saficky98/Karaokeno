@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { needsTransliteration, romanize } from '../lib/romanize.js'
 
 // Karaoke zobrazení synchronizovaného textu:
@@ -71,29 +71,53 @@ function useSmoothTime(getTime) {
 
 const clamp01 = (x) => Math.max(0, Math.min(1, x))
 
-// Odhad, jak dlouho se řádek skutečně zpívá (~11 znaků/s), omezený mezerou
-// do dalšího řádku — přes mezihru se vybarvování „netáhne".
-function lineWindow(line, next) {
+// Tempo zpěvu KONKRÉTNÍ písničky (sekundy na znak): medián z rozestupů
+// sousedních řádků. Univerzální konstanta nefunguje — balada a rychlá
+// písnička mají úplně jiné tempo vybarvování.
+function songRate(lines) {
+  const samples = []
+  for (let i = 0; i < lines.length - 1; i++) {
+    const gap = lines[i + 1].t - lines[i].t
+    const chars = lines[i].text?.length ?? 0
+    // jen „normální" řádky — mezihra ani rychlé překryvy tempo nevypovídají
+    if (gap >= 1 && gap <= 12 && chars >= 6) samples.push(gap / chars)
+  }
+  if (samples.length < 3) return 0.09
+  samples.sort((a, b) => a - b)
+  const median = samples[Math.floor(samples.length / 2)]
+  return Math.max(0.045, Math.min(0.2, median))
+}
+
+// Jak dlouho se řádek skutečně zpívá:
+// 1. titulky z videa nesou dobu zobrazení (line.d) — ta platí,
+// 2. jinak odhad z délky textu a tempa téhle písničky,
+// vždy ohraničené nástupem dalšího řádku.
+function lineWindow(line, next, rate) {
   const gap = next ? Math.max(next.t - line.t, 0.4) : 8
-  const estimate = Math.max(1.6, Math.min(11, (line.text?.length ?? 12) * 0.09))
+  if (line.d > 0.4) return Math.min(line.d, gap * 0.98)
+  const estimate = Math.max(1.4, Math.min(12, (line.text?.length ?? 12) * rate))
   return Math.min(gap * 0.96, estimate)
 }
 
-// Každému slovu interval [start, end). Skutečné časy slov z LRC mají
-// přednost; jinak se okno řádku rozdělí podle délek slov.
-function wordTimings(line, next) {
+// Každému slovu interval [start, end). Skutečné časy slov (titulky/LRC)
+// mají přednost; jinak se okno řádku rozdělí podle délek slov.
+function wordTimings(line, next, rate) {
   if (!line) return []
   if (line.words?.length) {
-    const tail = next?.t ?? line.words[line.words.length - 1].t + 2
+    const last = line.words[line.words.length - 1]
+    // konec posledního slova: skutečný konec řádku (d), jinak další řádek
+    let tail = line.d > 0.4 ? line.t + line.d : (next?.t ?? last.t + 2)
+    if (next?.t) tail = Math.min(tail, next.t)
+    tail = Math.max(tail, last.t + 0.3)
     return line.words.map((w, i) => ({
       text: w.text,
       start: w.t,
-      end: line.words[i + 1]?.t ?? Math.min(tail, w.t + 2),
+      end: line.words[i + 1]?.t ?? Math.min(tail, w.t + 3.5),
     }))
   }
   const words = (line.text || '').split(/\s+/).filter(Boolean)
   if (words.length === 0) return []
-  const window = lineWindow(line, next)
+  const window = lineWindow(line, next, rate)
   const weights = words.map((w) => w.length + 0.7)
   const total = weights.reduce((a, b) => a + b, 0)
   let t = line.t
@@ -127,6 +151,7 @@ const SIZES = {
 export default function SyncedLyrics({ lines, getTime, size = 'lg' }) {
   const now = useSmoothTime(getTime)
   const S = SIZES[size] ?? SIZES.lg
+  const rate = useMemo(() => songRate(lines), [lines])
 
   let index = -1
   for (let i = 0; i < lines.length; i++) {
@@ -136,7 +161,7 @@ export default function SyncedLyrics({ lines, getTime, size = 'lg' }) {
   const current = index >= 0 ? lines[index] : null
   const next = lines[index + 1] ?? null
 
-  const currentWords = wordTimings(current, next)
+  const currentWords = wordTimings(current, next, rate)
   const currentEnd = currentWords.length ? currentWords[currentWords.length - 1].end : 0
 
   // Mezihra: aktuální řádek je dozpívaný a do dalšího zbývá znatelná pauza
@@ -150,7 +175,7 @@ export default function SyncedLyrics({ lines, getTime, size = 'lg' }) {
   // Během mezihry (a před první slokou) povýšíme další řádek do hlavní role.
   const showUpcoming = !current || inBreak
   const bigLine = showUpcoming ? next : current
-  const bigWords = showUpcoming ? wordTimings(next, lines[index + 2] ?? null) : currentWords
+  const bigWords = showUpcoming ? wordTimings(next, lines[index + 2] ?? null, rate) : currentWords
   const smallLine = showUpcoming ? (lines[index + 2] ?? null) : next
 
   return (
