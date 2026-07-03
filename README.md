@@ -4,6 +4,8 @@ Webová karaoke aplikace pro párty v jedné místnosti. Hráči se střídají 
 zařízení, zpívají na YouTube karaoke videa a aplikace přes mikrofon počítá
 zábavné skóre (0–10 000) a vede žebříček. Rozhraní je v ukrajinštině.
 
+**Živě:** https://karaokeno.vercel.app
+
 ## Funkce
 
 - 🎬 Přehrávání YouTube videí (vyhledáváním i vložením odkazu)
@@ -34,7 +36,7 @@ V nasazené aplikaci jde klíč aktivovat i za běhu: otevři
 Klíč si v Google Cloud Console omez na doménu aplikace a jen na
 **YouTube Data API v3**.
 
-## Spuštění bez Vercelu
+## Spuštění mimo Vercel
 
 ```bash
 npm install
@@ -43,12 +45,14 @@ npm start
 ```
 
 `npm start` spustí malý Node server, který obslouží sestavenou aplikaci ze
-složky `dist/` i API cesty pro vyhledávání a titulky. Stejný postup funguje na
-vlastním serveru, Railway, Renderu, Fly.io, DigitalOceanu nebo jiném Node
-hostingu. V produkci musí běžet přes HTTPS, jinak prohlížeč nepovolí mikrofon.
+složky `dist/` i API cesty pro vyhledávání a titulky. Produkční odkaz běží na
+Vercelu; tento postup je záloha pro vlastní server, Railway, Render, Fly.io,
+DigitalOcean nebo jiný Node hosting. V produkci musí běžet přes HTTPS, jinak
+prohlížeč nepovolí mikrofon.
 
 ## Tech stack
 
 React + Vite, Tailwind CSS, YouTube IFrame Player API, YouTube Data API v3,
 Web Audio API. Texty písní: titulky přímo z hraného videa přes `api/captions.js`
-a synchronizované texty z [LRCLIB](https://lrclib.net).
+a synchronizované texty z [LRCLIB](https://lrclib.net). Produkční nasazení běží
+na Vercelu.
