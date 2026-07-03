@@ -7,7 +7,9 @@ let audioContext = null
 export async function requestMic() {
   if (stream?.active) return stream
   stream = await navigator.mediaDevices.getUserMedia({
-    audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: false },
+    // echoCancellation MUSÍ být vypnuté: s ním prohlížeč (hlavně iOS) zapne
+    // „hovorový" režim a ztlumuje přehrávanou hudbu, když se zpívá.
+    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
   })
   return stream
 }

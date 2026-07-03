@@ -2,8 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { needsTransliteration, romanize } from '../lib/romanize.js'
 
 // Karaoke zobrazení synchronizovaného textu:
-// - aktuální řádek se vybarvuje SLOVO PO SLOVĚ (z časů slov v LRC, nebo
-//   z odhadu rozloženého podle délek slov v okně řádku),
+// - aktuální řádek je velký a jasný (bez postupného vybarvování — překáželo),
 // - pod ním běží náhled dalšího řádku,
 // - během mezihry ubíhá lišta do nástupu dalšího řádku,
 // - cizí písma dostávají přepis výslovnosti.
@@ -43,7 +42,6 @@ function useSmoothTime(getTime) {
         } else if (drift > 0.04) {
           // Vzorek z přehrávače je vždy „stará pravda" (hlásí se se zpožděním).
           // Když je PŘED predikcí, jsme prokazatelně pozadu → dorovnat hned.
-          // Tím zmizí systematické zpoždění textu z ukotvení na starý vzorek.
           playing = true
           baseVideo = real
           basePerf = perf
@@ -67,19 +65,17 @@ function useSmoothTime(getTime) {
   return now
 }
 
-// ---------- časování slov ----------
+// ---------- odhad konce řádku (pro detekci mezihry) ----------
 
 const clamp01 = (x) => Math.max(0, Math.min(1, x))
 
 // Tempo zpěvu KONKRÉTNÍ písničky (sekundy na znak): medián z rozestupů
-// sousedních řádků. Univerzální konstanta nefunguje — balada a rychlá
-// písnička mají úplně jiné tempo vybarvování.
+// sousedních řádků.
 function songRate(lines) {
   const samples = []
   for (let i = 0; i < lines.length - 1; i++) {
     const gap = lines[i + 1].t - lines[i].t
     const chars = lines[i].text?.length ?? 0
-    // jen „normální" řádky — mezihra ani rychlé překryvy tempo nevypovídají
     if (gap >= 1 && gap <= 12 && chars >= 6) samples.push(gap / chars)
   }
   if (samples.length < 3) return 0.09
@@ -88,45 +84,13 @@ function songRate(lines) {
   return Math.max(0.045, Math.min(0.2, median))
 }
 
-// Jak dlouho se řádek skutečně zpívá:
-// 1. titulky z videa nesou dobu zobrazení (line.d) — ta platí,
-// 2. jinak odhad z délky textu a tempa téhle písničky,
-// vždy ohraničené nástupem dalšího řádku.
+// Jak dlouho se řádek skutečně zpívá: trvání z titulků (line.d) má přednost,
+// jinak odhad z délky textu a tempa písničky — kvůli detekci mezihry.
 function lineWindow(line, next, rate) {
   const gap = next ? Math.max(next.t - line.t, 0.4) : 8
   if (line.d > 0.4) return Math.min(line.d, gap * 0.98)
   const estimate = Math.max(1.4, Math.min(12, (line.text?.length ?? 12) * rate))
   return Math.min(gap * 0.96, estimate)
-}
-
-// Každému slovu interval [start, end). Skutečné časy slov (titulky/LRC)
-// mají přednost; jinak se okno řádku rozdělí podle délek slov.
-function wordTimings(line, next, rate) {
-  if (!line) return []
-  if (line.words?.length) {
-    const last = line.words[line.words.length - 1]
-    // konec posledního slova: skutečný konec řádku (d), jinak další řádek
-    let tail = line.d > 0.4 ? line.t + line.d : (next?.t ?? last.t + 2)
-    if (next?.t) tail = Math.min(tail, next.t)
-    tail = Math.max(tail, last.t + 0.3)
-    return line.words.map((w, i) => ({
-      text: w.text,
-      start: w.t,
-      end: line.words[i + 1]?.t ?? Math.min(tail, w.t + 3.5),
-    }))
-  }
-  const words = (line.text || '').split(/\s+/).filter(Boolean)
-  if (words.length === 0) return []
-  const window = lineWindow(line, next, rate)
-  const weights = words.map((w) => w.length + 0.7)
-  const total = weights.reduce((a, b) => a + b, 0)
-  let t = line.t
-  return words.map((w, i) => {
-    const d = (window * weights[i]) / total
-    const seg = { text: w, start: t, end: t + d }
-    t += d
-    return seg
-  })
 }
 
 // ---------- komponenta ----------
@@ -161,8 +125,7 @@ export default function SyncedLyrics({ lines, getTime, size = 'lg' }) {
   const current = index >= 0 ? lines[index] : null
   const next = lines[index + 1] ?? null
 
-  const currentWords = wordTimings(current, next, rate)
-  const currentEnd = currentWords.length ? currentWords[currentWords.length - 1].end : 0
+  const currentEnd = current ? current.t + lineWindow(current, next, rate) : 0
 
   // Mezihra: aktuální řádek je dozpívaný a do dalšího zbývá znatelná pauza
   // (nebo píseň ještě nezačala) → lišta odpočítává nástup.
@@ -175,20 +138,13 @@ export default function SyncedLyrics({ lines, getTime, size = 'lg' }) {
   // Během mezihry (a před první slokou) povýšíme další řádek do hlavní role.
   const showUpcoming = !current || inBreak
   const bigLine = showUpcoming ? next : current
-  const bigWords = showUpcoming ? wordTimings(next, lines[index + 2] ?? null, rate) : currentWords
   const smallLine = showUpcoming ? (lines[index + 2] ?? null) : next
 
   return (
     <div className="flex flex-col items-center gap-1.5 text-center">
       {inBreak && <BreakBar from={current ? currentEnd : 0} to={next.t} now={now} />}
 
-      <p className={`${S.big} ${S.minH}`}>
-        {bigWords.length > 0 ? (
-          bigWords.map((word, i) => <WipedWord key={`${index}-${i}`} word={word} now={now} />)
-        ) : (
-          <span>&nbsp;</span>
-        )}
-      </p>
+      <p className={`${S.big} ${S.minH} text-white/95`}>{bigLine ? bigLine.text : ' '}</p>
       {bigLine && needsTransliteration(bigLine.text) && (
         <p className={`${S.translit} leading-snug`}>{romanize(bigLine.text)}</p>
       )}
@@ -198,25 +154,6 @@ export default function SyncedLyrics({ lines, getTime, size = 'lg' }) {
         <p className={`${S.translitSmall} leading-snug`}>{romanize(smallLine.text)}</p>
       )}
     </div>
-  )
-}
-
-// Jedno slovo s „wipe" efektem: vybarvuje se zleva podle svého intervalu.
-function WipedWord({ word, now }) {
-  const p = clamp01((now - word.start) / Math.max(word.end - word.start, 0.001))
-  if (p <= 0) return <span className="text-white/85">{word.text} </span>
-  if (p >= 1) return <span className="text-neon-cyan">{word.text} </span>
-  return (
-    <span
-      style={{
-        backgroundImage: `linear-gradient(90deg, var(--color-neon-cyan) ${p * 100}%, rgba(255,255,255,0.85) ${p * 100}%)`,
-        WebkitBackgroundClip: 'text',
-        backgroundClip: 'text',
-        color: 'transparent',
-      }}
-    >
-      {word.text}{' '}
-    </span>
   )
 }
 

@@ -114,6 +114,10 @@ const STR = {
 
     lyrics_title: 'Текст пісні',
     lyrics_from_video: 'Текст із цього відео',
+    mic_toggle_off: 'Вимкнути мікрофон',
+    mic_toggle_on: 'Увімкнути мікрофон',
+    sound_toggle_off: 'Вимкнути звук',
+    sound_toggle_on: 'Увімкнути звук',
     lyrics_loading: 'Завантажую текст…',
     lyrics_empty: 'Текст не вдалося завантажити. Перевір інтернет.',
     lyrics_close: 'Закрити текст',
@@ -268,6 +272,10 @@ const STR = {
 
     lyrics_title: 'Text písničky',
     lyrics_from_video: 'Text z tohoto videa',
+    mic_toggle_off: 'Vypnout mikrofon',
+    mic_toggle_on: 'Zapnout mikrofon',
+    sound_toggle_off: 'Vypnout zvuk',
+    sound_toggle_on: 'Zapnout zvuk',
     lyrics_loading: 'Načítám text…',
     lyrics_empty: 'Text se nepodařilo načíst. Zkontroluj internet.',
     lyrics_close: 'Zavřít text',

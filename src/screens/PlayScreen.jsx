@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import confetti from 'canvas-confetti'
-import { Clapperboard, Languages, Mic, SkipForward, VideoOff, Volume2, X } from 'lucide-react'
+import { Clapperboard, Languages, Mic, MicOff, SkipForward, VideoOff, Volume2, VolumeX, X } from 'lucide-react'
 import YouTubePlayer from '../components/YouTubePlayer.jsx'
 import VideoLinkForm from '../components/VideoLinkForm.jsx'
 import LiveScoreHUD from '../components/LiveScoreHUD.jsx'
@@ -86,6 +86,8 @@ export default function PlayScreen({
   const [showLyrics, setShowLyrics] = useState(true)
   // null = ještě nevíme, true = text běží, false = neexistuje (schovat tlačítko)
   const [lyricsAvailable, setLyricsAvailable] = useState(null)
+  const [soundOn, setSoundOn] = useState(true)
+  const [micOn, setMicOn] = useState(true)
 
   const engineRef = useRef(null)
   const stopRef = useRef(null)
@@ -178,10 +180,10 @@ export default function PlayScreen({
 
   const { videoId, title, singer } = nowPlaying
 
-  async function startScoring() {
-    if (!scoringActive) return
+  // Rozjede smyčku analýzy nad stávajícím engine (mikrofon si vyžádá znovu,
+  // když je po obnovení stránky potřeba).
+  async function runAnalysis() {
     if (!hasMic()) {
-      // po obnovení stránky je potřeba mikrofon získat znovu (prohlížeč si souhlas pamatuje)
       try {
         await requestMic()
       } catch {
@@ -189,13 +191,47 @@ export default function PlayScreen({
         return
       }
     }
-    const duration = playerApiRef.current?.getDuration?.() || 180
-    engineRef.current = new ScoreEngine(duration)
     stopRef.current?.()
     stopRef.current = startAnalysis((frame) => {
       const state = engineRef.current?.update(frame)
       if (state) setLive(state)
     })
+  }
+
+  async function startScoring() {
+    if (!scoringActive) return
+    const duration = playerApiRef.current?.getDuration?.() || 180
+    engineRef.current = new ScoreEngine(duration)
+    await runAnalysis()
+  }
+
+  // Přepínač mikrofonu: vypnutí zmrazí skórování (nic se nepočítá),
+  // zapnutí naváže na rozdělané skóre.
+  function toggleMic() {
+    if (micOn) {
+      stopRef.current?.()
+      stopRef.current = null
+      setLive(null)
+      setMicOn(false)
+    } else {
+      setMicOn(true)
+      if (engineRef.current) runAnalysis()
+      else startScoring()
+    }
+  }
+
+  // Přepínač zvuku videa.
+  function toggleSound() {
+    const player = playerApiRef.current
+    if (!player) return
+    if (soundOn) {
+      player.mute?.()
+      setSoundOn(false)
+    } else {
+      player.unMute?.()
+      setSoundOn(true)
+      setNeedsUnmute(false)
+    }
   }
 
   function finishSong() {
@@ -221,25 +257,31 @@ export default function PlayScreen({
     setCounting(true)
     setShowLyrics(true)
     setNeedsUnmute(false)
+    setSoundOn(true)
+    setMicOn(true)
     onNext()
   }
 
-  // Po odpočtu se video musí rozjet samo. Když prohlížeč (hlavně mobil)
-  // zablokuje automatické přehrávání se zvukem, pustíme ho ztlumené
-  // a ukážeme jedno tlačítko „Zapnout zvuk".
-  function ensurePlaying() {
+  // Po odpočtu se video musí rozjet SAMO. Zkoušíme opakovaně (přehrávač
+  // může ještě nabíhat); teprve když autoplay se zvukem opravdu neprojde
+  // (hlavně iPhone), pustíme video ztlumené a ukážeme „Zapnout zvuk".
+  function ensurePlaying(attempt = 0) {
     const player = playerApiRef.current
-    if (!player?.getPlayerState) return
+    if (!player?.getPlayerState) {
+      if (attempt < 10) setTimeout(() => ensurePlaying(attempt + 1), 500)
+      return
+    }
+    const state = player.getPlayerState?.()
+    if (state === 1 || state === 3) return // hraje / bufferuje — hotovo
     player.playVideo?.()
-    setTimeout(() => {
-      const state = player.getPlayerState?.()
-      // 1 = hraje, 3 = bufferuje — jinak je autoplay zablokovaný
-      if (state !== 1 && state !== 3) {
-        player.mute?.()
-        player.playVideo?.()
-        setNeedsUnmute(true)
-      }
-    }, 800)
+    if (attempt < 6) {
+      setTimeout(() => ensurePlaying(attempt + 1), 500)
+    } else {
+      player.mute?.()
+      player.playVideo?.()
+      setSoundOn(false)
+      setNeedsUnmute(true)
+    }
   }
 
   return (
@@ -269,7 +311,7 @@ export default function PlayScreen({
 
       {needsUnmute && !ended && playerError === null && !counting && (
         <button
-          onClick={() => { playerApiRef.current?.unMute?.(); setNeedsUnmute(false) }}
+          onClick={() => { playerApiRef.current?.unMute?.(); setSoundOn(true); setNeedsUnmute(false) }}
           className="btn-primary absolute bottom-16 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2"
         >
           <Volume2 size={18} strokeWidth={2} /> {t('unmute')}
@@ -402,12 +444,36 @@ export default function PlayScreen({
       )}
 
       {!ended && (
-        <button
-          onClick={onExit}
-          className="absolute top-3 right-3 flex items-center gap-1.5 rounded-full border border-line bg-black/60 px-4 py-2 text-sm text-white/85 backdrop-blur transition hover:bg-black/80"
-        >
-          <X size={15} strokeWidth={2} /> {t('exit')}
-        </button>
+        <div className="absolute top-3 right-3 flex items-center gap-2">
+          {scoringActive && (
+            <button
+              onClick={toggleMic}
+              aria-label={t(micOn ? 'mic_toggle_off' : 'mic_toggle_on')}
+              title={t(micOn ? 'mic_toggle_off' : 'mic_toggle_on')}
+              className={`flex h-9 w-9 items-center justify-center rounded-full border border-line backdrop-blur transition ${
+                micOn ? 'bg-black/60 text-white/85 hover:bg-black/80' : 'bg-red-500/25 text-red-200 hover:bg-red-500/35'
+              }`}
+            >
+              {micOn ? <Mic size={15} strokeWidth={2} /> : <MicOff size={15} strokeWidth={2} />}
+            </button>
+          )}
+          <button
+            onClick={toggleSound}
+            aria-label={t(soundOn ? 'sound_toggle_off' : 'sound_toggle_on')}
+            title={t(soundOn ? 'sound_toggle_off' : 'sound_toggle_on')}
+            className={`flex h-9 w-9 items-center justify-center rounded-full border border-line backdrop-blur transition ${
+              soundOn ? 'bg-black/60 text-white/85 hover:bg-black/80' : 'bg-red-500/25 text-red-200 hover:bg-red-500/35'
+            }`}
+          >
+            {soundOn ? <Volume2 size={15} strokeWidth={2} /> : <VolumeX size={15} strokeWidth={2} />}
+          </button>
+          <button
+            onClick={onExit}
+            className="flex items-center gap-1.5 rounded-full border border-line bg-black/60 px-4 py-2 text-sm text-white/85 backdrop-blur transition hover:bg-black/80"
+          >
+            <X size={15} strokeWidth={2} /> {t('exit')}
+          </button>
+        </div>
       )}
     </div>
   )
