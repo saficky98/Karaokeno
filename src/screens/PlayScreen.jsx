@@ -70,6 +70,7 @@ export default function PlayScreen({
   onPlayDirect,
   onGoHome,
   onSongFinished,
+  onProgress,
   leaderboard,
 }) {
   const { t } = useLang()
@@ -92,6 +93,16 @@ export default function PlayScreen({
   // Úklid analýzy při odchodu z obrazovky / výměně písničky
   useEffect(() => {
     return () => stopRef.current?.()
+  }, [nowPlaying?.videoId])
+
+  // Pozice přehrávání pro hosty v místnosti (každých 5 s)
+  useEffect(() => {
+    if (!nowPlaying) return
+    const timer = setInterval(() => {
+      const sec = playerApiRef.current?.getCurrentTime?.() ?? 0
+      if (sec > 0) onProgress?.(sec)
+    }, 5000)
+    return () => clearInterval(timer)
   }, [nowPlaying?.videoId])
 
   // Konfety při skvělém výsledku 🎉
@@ -261,13 +272,13 @@ export default function PlayScreen({
         </button>
       )}
 
-      {showLyrics && !ended && playerError === null && (
+      {showLyrics && !ended && playerError === null && nowPlaying.lyricsId && (
         <Suspense fallback={null}>
-          <LyricsPanel title={title} playerApiRef={playerApiRef} onClose={() => setShowLyrics(false)} />
+          <LyricsPanel lyricsId={nowPlaying.lyricsId} playerApiRef={playerApiRef} onClose={() => setShowLyrics(false)} />
         </Suspense>
       )}
 
-      {!ended && playerError === null && !counting && !showLyrics && (
+      {!ended && playerError === null && !counting && !showLyrics && nowPlaying.lyricsId && (
         <button
           onClick={() => setShowLyrics(true)}
           className="absolute right-3 bottom-3 flex items-center gap-1.5 rounded-full border border-line bg-black/60 px-4 py-2 text-sm text-white/85 backdrop-blur transition hover:bg-black/80"

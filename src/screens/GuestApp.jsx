@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Camera, Check, ListMusic, Mic, Radio, Trophy, X } from 'lucide-react'
+import { getLyricsById } from '../lib/lyrics.js'
+import SyncedLyrics from '../components/SyncedLyrics.jsx'
 import SongPicker from '../components/SongPicker.jsx'
 import Avatar from '../components/Avatar.jsx'
 import { AVATARS, COLORS } from './PlayersScreen.jsx'
@@ -38,6 +40,7 @@ function GuestInner({ room, persisted, lang, setLang }) {
   const [roomState, setRoomState] = useState(undefined) // undefined = čekáme, null = zavřeno
   const [status, setStatus] = useState('connecting')
   const apiRef = useRef(null)
+  const anchorRef = useRef(null)
   const nextSongIdRef = useRef(persisted?.nextSongId ?? 1)
 
   // připojení do místnosti
@@ -49,7 +52,12 @@ function GuestInner({ room, persisted, lang, setLang }) {
         roomId: room.id,
         secret: room.secret,
         role: 'guest',
-        onRoom: (state) => setRoomState(state),
+        onRoom: (state) => {
+          if (state?.nowPlaying?.pos != null) {
+            anchorRef.current = { pos: state.nowPlaying.pos, at: performance.now() }
+          }
+          setRoomState(state)
+        },
         onStatus: setStatus,
       })
       if (disposed) {
@@ -175,13 +183,16 @@ function GuestInner({ room, persisted, lang, setLang }) {
                 <SongPicker
                   compact
                   onPick={(song) =>
-                    setSongs((list) => [...list, { id: nextSongIdRef.current++, videoId: song.videoId, title: song.title }])
+                    setSongs((list) => [
+                      ...list,
+                      { id: nextSongIdRef.current++, videoId: song.videoId, title: song.title, lyricsId: song.lyricsId ?? null },
+                    ])
                   }
                 />
               </section>
             )}
 
-            {roomState && <RoomView roomState={roomState} />}
+            {roomState && <RoomView roomState={roomState} anchorRef={anchorRef} />}
 
             {status !== 'connected' || !roomState ? (
               <p className="text-center text-xs text-white/35">{t('waiting_host')}</p>
@@ -292,7 +303,7 @@ function GuestProfile({ me, onSave }) {
   )
 }
 
-function RoomView({ roomState }) {
+function RoomView({ roomState, anchorRef }) {
   const { t } = useLang()
   const players = roomState.players ?? []
   const queue = roomState.queue ?? []
@@ -315,12 +326,17 @@ function RoomView({ roomState }) {
       </p>
 
       {roomState.nowPlaying && (
-        <div className="flex items-center gap-2.5 rounded-xl bg-neon-pink/10 px-3 py-2.5 text-sm">
-          {nowSinger && <Avatar player={nowSinger} size="sm" />}
-          <span className="text-white/60">{t('now_singing')}:</span>
-          <span className="min-w-0 flex-1 truncate font-bold">
-            {nowSinger?.name}{roomState.nowPlaying.title ? ` — ${roomState.nowPlaying.title}` : ''}
-          </span>
+        <div className="flex flex-col gap-2 rounded-xl bg-neon-pink/10 px-3 py-2.5">
+          <div className="flex items-center gap-2.5 text-sm">
+            {nowSinger && <Avatar player={nowSinger} size="sm" />}
+            <span className="text-white/60">{t('now_singing')}:</span>
+            <span className="min-w-0 flex-1 truncate font-bold">
+              {nowSinger?.name}{roomState.nowPlaying.title ? ` — ${roomState.nowPlaying.title}` : ''}
+            </span>
+          </div>
+          {roomState.nowPlaying.lyricsId && (
+            <GuestLyrics lyricsId={roomState.nowPlaying.lyricsId} anchorRef={anchorRef} />
+          )}
         </div>
       )}
 
@@ -367,5 +383,34 @@ function RoomView({ roomState }) {
         </div>
       )}
     </section>
+  )
+}
+
+
+// Živý text právě hrané písničky na telefonu hosta. Pozice přichází od
+// pořadatele každých pár sekund; mezi aktualizacemi čas dopočítáváme.
+function GuestLyrics({ lyricsId, anchorRef }) {
+  const [lyrics, setLyrics] = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    setLyrics(null)
+    getLyricsById(lyricsId).then((found) => {
+      if (!cancelled) setLyrics(found)
+    })
+    return () => { cancelled = true }
+  }, [lyricsId])
+
+  const getTime = useCallback(() => {
+    const anchor = anchorRef.current
+    if (!anchor) return 0
+    return anchor.pos + (performance.now() - anchor.at) / 1000
+  }, [anchorRef])
+
+  if (!lyrics?.synced) return null
+  return (
+    <div className="border-t border-white/10 pt-2">
+      <SyncedLyrics lines={lyrics.synced} getTime={getTime} size="sm" />
+    </div>
   )
 }

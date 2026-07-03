@@ -1,35 +1,19 @@
 import { useState } from 'react'
-import { KeyRound, Link2, Plus, Search } from 'lucide-react'
-import { searchKaraoke, getApiKey, setApiKey } from '../lib/youtubeApi.js'
+import { KeyRound, Link2, Loader2, Music2, Plus, Search } from 'lucide-react'
+import { searchKaraoke, findVideosForTrack, getApiKey, setApiKey } from '../lib/youtubeApi.js'
+import { searchSongs, formatSeconds } from '../lib/lyrics.js'
 import { parseYouTubeId } from '../lib/youtube.js'
 import { useLang } from '../lib/i18n.jsx'
 
-// Vyhledávání s fallbackem na ruční odkaz. onPick({videoId, title}) — výběr písničky.
-// Režim „Оригінал" hledá běžné klipy (text zobrazí appka), „Караоке" přidává slovo karaoke.
+// Výběr písničky, dva režimy:
+// - „Оригінал": hledá se rovnou PÍSNIČKA v databázi synchronizovaných textů;
+//   po výběru appka najde YouTube video se sedící délkou. Co nemá ověřený
+//   text, vůbec se nenabídne. onPick dostane i lyricsId.
+// - „Караоке": klasické hledání karaoke videí na YouTube (text je ve videu).
 export default function SongPicker({ onPick, compact = false }) {
   const { t } = useLang()
-  const [query, setQuery] = useState('')
   const [mode, setMode] = useState('original')
-  const [results, setResults] = useState(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
   const [hasKey, setHasKey] = useState(Boolean(getApiKey()))
-
-  async function submit(event) {
-    event.preventDefault()
-    const text = query.trim()
-    if (!text || loading) return
-    setLoading(true)
-    setError(null)
-    setResults(null)
-    try {
-      setResults(await searchKaraoke(text, { karaoke: mode === 'karaoke' }))
-    } catch (err) {
-      setError(err?.type ?? 'network')
-    } finally {
-      setLoading(false)
-    }
-  }
 
   if (!hasKey) {
     return (
@@ -67,6 +51,65 @@ export default function SongPicker({ onPick, compact = false }) {
         {mode === 'original' ? t('search_sub_original') : t('search_sub_karaoke')}
       </p>
 
+      {mode === 'original' ? <OriginalSearch onPick={onPick} /> : <KaraokeSearch onPick={onPick} />}
+
+      <LinkFallback onPick={onPick} />
+    </div>
+  )
+}
+
+// Hledání písniček s ověřeným synchronizovaným textem.
+function OriginalSearch({ onPick }) {
+  const { t } = useLang()
+  const [query, setQuery] = useState('')
+  const [songs, setSongs] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [resolvingId, setResolvingId] = useState(null) // ke které písničce hledáme video
+  const [error, setError] = useState(null)
+  const [songError, setSongError] = useState(null) // {id, type}
+
+  async function submit(event) {
+    event.preventDefault()
+    const text = query.trim()
+    if (!text || loading) return
+    setLoading(true)
+    setError(null)
+    setSongs(null)
+    setSongError(null)
+    const found = await searchSongs(text)
+    setLoading(false)
+    if (found === null) {
+      setError('network')
+      return
+    }
+    setSongs(found)
+  }
+
+  // K vybrané nahrávce najdeme video se sedící délkou (±5 s).
+  async function pickSong(song) {
+    if (resolvingId) return
+    setResolvingId(song.lyricsId)
+    setSongError(null)
+    try {
+      const videos = await findVideosForTrack(song.artist, song.track, song.duration)
+      if (videos.length === 0) {
+        setSongError({ id: song.lyricsId, type: 'novideo' })
+        return
+      }
+      onPick({
+        videoId: videos[0].videoId,
+        title: [song.artist, song.track].filter(Boolean).join(' — '),
+        lyricsId: song.lyricsId,
+      })
+    } catch (err) {
+      setSongError({ id: song.lyricsId, type: err?.type ?? 'network' })
+    } finally {
+      setResolvingId(null)
+    }
+  }
+
+  return (
+    <>
       <form onSubmit={submit} className="flex gap-2">
         <input
           type="search"
@@ -86,13 +129,105 @@ export default function SongPicker({ onPick, compact = false }) {
       </form>
 
       {loading && <p className="animate-pulse text-center text-sm text-white/55">{t('searching')}</p>}
+      {error && <p className="rounded-xl bg-red-500/10 p-3 text-sm text-red-300">{t('err_network')}</p>}
+      {songs?.length === 0 && <p className="text-center text-sm text-white/55">{t('no_songs_found')}</p>}
 
+      {songs?.length > 0 && (
+        <ul className="flex flex-col gap-2">
+          {songs.map((song) => (
+            <li key={song.lyricsId}>
+              <button
+                onClick={() => pickSong(song)}
+                disabled={resolvingId !== null}
+                className="card flex w-full items-center gap-3 p-3 text-left transition hover:bg-panel-2 active:scale-[0.99] disabled:opacity-60"
+              >
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-neon-cyan/10 text-neon-cyan">
+                  {resolvingId === song.lyricsId ? (
+                    <Loader2 size={18} strokeWidth={2} className="animate-spin" />
+                  ) : (
+                    <Music2 size={18} strokeWidth={1.8} />
+                  )}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-bold">{song.track}</p>
+                  <p className="mt-0.5 truncate text-xs text-white/40">{song.artist}</p>
+                </div>
+                {song.script && (
+                  <span className="shrink-0 rounded-md border border-line px-1.5 py-0.5 text-[10px] text-white/50">
+                    {song.script}
+                  </span>
+                )}
+                <span className="shrink-0 text-xs text-white/40 tabular-nums">{formatSeconds(song.duration)}</span>
+                <Plus size={17} strokeWidth={2.2} className="shrink-0 text-neon-cyan" />
+              </button>
+              {resolvingId === song.lyricsId && (
+                <p className="mt-1 animate-pulse text-center text-xs text-white/45">{t('finding_video')}</p>
+              )}
+              {songError?.id === song.lyricsId && (
+                <p className="mt-1 rounded-lg bg-red-500/10 p-2 text-center text-xs text-red-300">
+                  {songError.type === 'novideo'
+                    ? t('no_video_match')
+                    : t(songError.type === 'quota' ? 'err_quota' : songError.type === 'key' ? 'err_key' : 'err_network')}
+                </p>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  )
+}
+
+// Klasické hledání karaoke videí (text je zapečený ve videu).
+function KaraokeSearch({ onPick }) {
+  const { t } = useLang()
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+
+  async function submit(event) {
+    event.preventDefault()
+    const text = query.trim()
+    if (!text || loading) return
+    setLoading(true)
+    setError(null)
+    setResults(null)
+    try {
+      setResults(await searchKaraoke(text, { karaoke: true }))
+    } catch (err) {
+      setError(err?.type ?? 'network')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <>
+      <form onSubmit={submit} className="flex gap-2">
+        <input
+          type="search"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder={t('search_placeholder')}
+          className="field flex-1 text-base"
+        />
+        <button
+          type="submit"
+          disabled={loading}
+          aria-label={t('searching')}
+          className="btn-primary flex items-center justify-center px-4 disabled:opacity-50"
+        >
+          <Search size={18} strokeWidth={2.2} />
+        </button>
+      </form>
+
+      {loading && <p className="animate-pulse text-center text-sm text-white/55">{t('searching')}</p>}
       {error && (
         <p className="rounded-xl bg-red-500/10 p-3 text-sm text-red-300">
           {t(error === 'quota' ? 'err_quota' : error === 'key' ? 'err_key' : 'err_network')}
         </p>
       )}
-
       {results?.length === 0 && <p className="text-center text-sm text-white/55">{t('no_results')}</p>}
 
       {results?.length > 0 && (
@@ -121,9 +256,7 @@ export default function SongPicker({ onPick, compact = false }) {
           ))}
         </ul>
       )}
-
-      <LinkFallback onPick={onPick} />
-    </div>
+    </>
   )
 }
 

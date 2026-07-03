@@ -184,7 +184,7 @@ export default function PlayersScreen({
                           ))}
                         </ul>
                       )}
-                      <SongPicker compact onPick={(song) => onAddPlayerSong(player.id, song.videoId, song.title)} />
+                      <SongPicker compact onPick={(song) => onAddPlayerSong(player.id, song.videoId, song.title, song.lyricsId ?? null)} />
                     </div>
                   )}
                 </li>

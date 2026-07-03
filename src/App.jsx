@@ -81,6 +81,8 @@ function HostApp() {
   const [roomStatus, setRoomStatus] = useState('connecting')
   const [usedGuestSongs, setUsedGuestSongs] = useState(saved?.usedGuestSongs ?? [])
   const roomApiRef = useRef(null)
+  const progressRef = useRef(0)
+  const [progressTick, setProgressTick] = useState(0)
   const usedGuestSongsRef = useRef(usedGuestSongs)
   usedGuestSongsRef.current = usedGuestSongs
 
@@ -121,10 +123,17 @@ function HostApp() {
       players: players.map((p) => ({ ...p, songs: undefined, songsCount: p.songs.length })),
       queue,
       results,
-      nowPlaying: nowPlaying ? { title: nowPlaying.title, singerId: nowPlaying.singerId } : null,
+      nowPlaying: nowPlaying
+        ? {
+            title: nowPlaying.title,
+            singerId: nowPlaying.singerId,
+            lyricsId: nowPlaying.lyricsId ?? null,
+            pos: progressRef.current,
+          }
+        : null,
       apiKey: getApiKey(),
     })
-  }, [players, queue, results, nowPlaying, room, roomStatus])
+  }, [players, queue, results, nowPlaying, room, roomStatus, progressTick])
 
   // Příspěvek hosta: jeho profil + písničky se stanou hráčem s playlistem.
   function applyGuestUpdate(guestId, data) {
@@ -140,7 +149,7 @@ function HostApp() {
         color: data.player.color ?? '#38cdec',
         photo: data.player.photo ?? null,
         songs: (data.songs ?? [])
-          .map((s) => ({ id: `${id}-${s.id}`, videoId: s.videoId, title: s.title ?? null }))
+          .map((s) => ({ id: `${id}-${s.id}`, videoId: s.videoId, title: s.title ?? null, lyricsId: s.lyricsId ?? null }))
           .filter((s) => !used.has(s.id)),
       }
       const index = list.findIndex((p) => p.id === id)
@@ -196,9 +205,11 @@ function HostApp() {
     setPlayers((list) => [...list, { id: nextId++, name, avatar, color, photo, songs: [] }])
   }
 
-  function addPlayerSong(playerId, videoId, title) {
+  function addPlayerSong(playerId, videoId, title, lyricsId = null) {
     setPlayers((list) =>
-      list.map((p) => (p.id === playerId ? { ...p, songs: [...p.songs, { id: nextId++, videoId, title }] } : p)),
+      list.map((p) =>
+        p.id === playerId ? { ...p, songs: [...p.songs, { id: nextId++, videoId, title, lyricsId }] } : p,
+      ),
     )
   }
 
@@ -215,7 +226,16 @@ function HostApp() {
     if (!song) return
     removePlayerSong(playerId, songId)
     markGuestSongsUsed([song.id])
-    setQueue((list) => [...list, { id: typeof song.id === 'string' ? song.id : nextId++, videoId: song.videoId, title: song.title, singerId: playerId }])
+    setQueue((list) => [
+      ...list,
+      {
+        id: typeof song.id === 'string' ? song.id : nextId++,
+        videoId: song.videoId,
+        title: song.title,
+        singerId: playerId,
+        lyricsId: song.lyricsId ?? null,
+      },
+    ])
   }
 
   // Naskládá osobní playlisty všech hráčů do fronty — férově se střídají.
@@ -228,7 +248,7 @@ function HostApp() {
       for (const p of remaining) {
         const song = p.songs.shift()
         if (song) {
-          additions.push({ id: song.id, videoId: song.videoId, title: song.title, singerId: p.id })
+          additions.push({ id: song.id, videoId: song.videoId, title: song.title, singerId: p.id, lyricsId: song.lyricsId ?? null })
           took = true
         }
       }
@@ -244,8 +264,8 @@ function HostApp() {
     setQueue((list) => list.filter((s) => s.singerId !== id))
   }
 
-  function addSong(videoId, title, singerId) {
-    setQueue((list) => [...list, { id: nextId++, videoId, title, singerId }])
+  function addSong(videoId, title, singerId, lyricsId = null) {
+    setQueue((list) => [...list, { id: nextId++, videoId, title, singerId, lyricsId }])
   }
 
   function removeSong(id) {
@@ -271,14 +291,14 @@ function HostApp() {
       setScreen('play')
       return
     }
-    setNowPlaying({ videoId: next.videoId, title: next.title, singerId: next.singerId })
+    setNowPlaying({ videoId: next.videoId, title: next.title, singerId: next.singerId, lyricsId: next.lyricsId ?? null })
     setQueue(rest)
     setScreen('play')
   }
 
   // Швидке відтворення за посиланням, без гравця і черги.
   function playDirect(videoId) {
-    setNowPlaying({ videoId, title: null, singerId: null })
+    setNowPlaying({ videoId, title: null, singerId: null, lyricsId: null })
     setScreen('play')
   }
 
@@ -360,6 +380,10 @@ function HostApp() {
             onPlayDirect={playDirect}
             onGoHome={() => setScreen('home')}
             onSongFinished={recordResult}
+            onProgress={(sec) => {
+              progressRef.current = sec
+              if (room) setProgressTick((x) => x + 1)
+            }}
             leaderboard={leaderboard}
           />
         )}
