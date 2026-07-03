@@ -13,29 +13,35 @@ function useSmoothTime(getTime) {
     let baseVideo = getTime() // čas videa v okamžiku ukotvení
     let basePerf = performance.now() // reálný čas téhož okamžiku
     let lastReal = baseVideo
+    let lastMovePerf = basePerf // kdy se skutečný čas naposledy pohnul
     let lastPoll = basePerf
     let playing = true
 
     const loop = (perf) => {
-      // Skutečný čas videa čteme jen ~5× za sekundu, ne každý snímek.
-      if (perf - lastPoll >= 180) {
+      // Skutečný čas videa čteme jen ~6× za sekundu, ne každý snímek.
+      if (perf - lastPoll >= 150) {
         const real = getTime()
-        const wallDelta = (perf - lastPoll) / 1000
-        const realDelta = real - lastReal
+        // YouTube hlásí čas jen ~4× za sekundu, takže dva vzorky po sobě můžou
+        // být shodné i za normálního přehrávání — jeden stejný vzorek proto
+        // NENÍ pauza. Pauzu/buffering poznáme, až když se čas nehne delší dobu.
+        if (Math.abs(real - lastReal) > 0.02) {
+          lastReal = real
+          lastMovePerf = perf
+        }
         const predicted = baseVideo + (perf - basePerf) / 1000
-        // Skoro se nehýbe = pauza/buffering; skok o víc než 0,3 s = přetočení.
-        if (realDelta < wallDelta * 0.35) {
+        if ((perf - lastMovePerf) / 1000 > 0.6) {
+          // dlouho beze změny → pauza/buffering: zamrzneme na skutečném čase
           playing = false
           baseVideo = real
           basePerf = perf
-        } else if (Math.abs(real - predicted) > 0.3) {
+        } else if (Math.abs(real - predicted) > 0.5) {
+          // velký skok → přetočení nebo rozjezd po pauze: srovnáme se
           playing = true
           baseVideo = real
           basePerf = perf
         } else {
           playing = true
         }
-        lastReal = real
         lastPoll = perf
       }
       setNow(playing ? baseVideo + (perf - basePerf) / 1000 : baseVideo)

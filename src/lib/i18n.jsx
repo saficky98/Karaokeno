@@ -63,6 +63,8 @@ const STR = {
 
     search_sub_original: 'Шукаємо пісні з перевіреним синхронним текстом — відео добереться саме.',
     search_sub_karaoke: 'Напиши назву — «караоке» додамо самі.',
+    search_sub_smart: 'Напиши назву — знайдемо пісню з синхронним текстом і транскрипцією. Якщо тексту немає, увімкнемо караоке-відео.',
+    fallback_karaoke: 'Синхронного тексту не знайшли — вмикаємо караоке-відео (текст уже у відео).',
     mode_original: 'Оригінал',
     mode_karaoke: 'Караоке',
     sings: 'Співає',
@@ -213,6 +215,8 @@ const STR = {
 
     search_sub_original: 'Hledáme písničky s ověřeným synchronizovaným textem — video se dohledá samo.',
     search_sub_karaoke: 'Napiš název — „karaoke“ přidáme sami.',
+    search_sub_smart: 'Napiš název — najdeme písničku se synchronizovaným textem a přepisem. Když text není, pustíme karaoke video.',
+    fallback_karaoke: 'Synchronizovaný text jsme nenašli — pouštíme karaoke video (text je přímo ve videu).',
     mode_original: 'Originál',
     mode_karaoke: 'Karaoke',
     sings: 'Zpívá',

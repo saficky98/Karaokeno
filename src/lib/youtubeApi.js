@@ -154,5 +154,15 @@ export async function findVideosForTrack(artist, track, targetSec, tolerance = 8
   return results
     .filter((v) => v.durationSec > 0 && Math.abs(v.durationSec - targetSec) <= tolerance)
     .map((v) => ({ ...v, diff: Math.abs(v.durationSec - targetSec), rank: videoRank(v) }))
-    .sort((a, b) => (a.rank !== b.rank ? a.rank - b.rank : a.diff - b.diff))
+    // „Prakticky stejná délka" = skoro jistě stejná nahrávka; drž ji vepředu.
+    // Jinak by přednost „— Topic" mohla vybrat jiný master (live / remaster /
+    // rozšířenou verzi) jen proto, že je Topic, a text z LRCLIB by nesedl.
+    // Teprve mezi stejně blízkými rozhoduje typ zdroje a pak nejmenší rozdíl.
+    .sort((a, b) => {
+      const closeA = a.diff <= 2 ? 0 : a.diff <= 4 ? 1 : 2
+      const closeB = b.diff <= 2 ? 0 : b.diff <= 4 ? 1 : 2
+      if (closeA !== closeB) return closeA - closeB
+      if (a.rank !== b.rank) return a.rank - b.rank
+      return a.diff - b.diff
+    })
 }
