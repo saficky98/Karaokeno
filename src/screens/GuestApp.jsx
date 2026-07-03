@@ -407,16 +407,21 @@ function GuestLyrics({ videoId, lyricsId, anchorRef }) {
   useEffect(() => {
     let cancelled = false
     setLyrics(null)
+    // stejné pořadí jako u pořadatele: ruční titulky → LRCLIB → ASR titulky
     const viaCaptions = videoId ? fetchVideoCaptions(videoId) : Promise.resolve(null)
     viaCaptions.then((caps) => {
       if (cancelled) return
-      if (caps) {
+      if (caps?.kind === 'manual') {
         setLyrics({ synced: caps.lines })
         return
       }
-      if (lyricsId == null) return
+      const asrFallback = caps ? { synced: caps.lines } : null
+      if (lyricsId == null) {
+        setLyrics(asrFallback)
+        return
+      }
       getLyricsById(lyricsId).then((found) => {
-        if (!cancelled) setLyrics(found)
+        if (!cancelled) setLyrics(found ?? asrFallback)
       })
     })
     return () => { cancelled = true }
