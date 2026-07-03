@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Languages, X } from 'lucide-react'
-import { getLyricsById } from '../lib/lyrics.js'
+import { getLyricsById, findLyricsForDuration } from '../lib/lyrics.js'
 import SyncedLyrics from './SyncedLyrics.jsx'
 import { useLang } from '../lib/i18n.jsx'
 
@@ -39,20 +39,48 @@ export default function LyricsPanel({ lyricsId, playerApiRef, onClose }) {
 
   useEffect(() => {
     let cancelled = false
+    let retimer = null
     setState('loading')
     setOffset(loadOffset(lyricsId))
     getLyricsById(lyricsId).then((found) => {
       if (cancelled) return
       setLyrics(found)
       setState(found ? 'ready' : 'empty')
+      if (found) scheduleRematch(found)
     })
-    return () => { cancelled = true }
+
+    // PŘESNÉ DOLADĚNÍ: jakmile známe skutečnou délku hrajícího videa,
+    // ověříme, že text je načasovaný na tuhle nahrávku. Když délka nesedí
+    // a existuje verze textu se sedící délkou, vyměníme ji — tím zmizí
+    // konstantní posuny typu „text nastupuje o pár sekund jinak".
+    function scheduleRematch(found, attempt = 0) {
+      const duration = playerApiRef.current?.getDuration?.() ?? 0
+      if (duration < 30) {
+        // přehrávač ještě nezná délku — zkoušíme chvilku znovu
+        if (attempt < 20) retimer = setTimeout(() => scheduleRematch(found, attempt + 1), 500)
+        return
+      }
+      if (Math.abs(duration - found.duration) <= 1.5) return // text sedí na nahrávku
+      findLyricsForDuration(found.artist, found.track, duration).then((better) => {
+        if (cancelled || !better || better.id === found.id) return
+        setLyrics(better)
+        setOffset(loadOffset(better.id))
+      })
+    }
+
+    return () => {
+      cancelled = true
+      clearTimeout(retimer)
+    }
   }, [lyricsId])
+
+  // Posun ukládáme ke skutečně použité verzi textu (po výměně se liší od prop).
+  const effectiveId = lyrics?.id ?? lyricsId
 
   function nudge(delta) {
     setOffset((o) => {
       const value = Math.round((o + delta) * 10) / 10
-      saveOffset(lyricsId, value)
+      saveOffset(effectiveId, value)
       return value
     })
   }
@@ -75,7 +103,7 @@ export default function LyricsPanel({ lyricsId, playerApiRef, onClose }) {
           <>
             <button onClick={() => nudge(-0.5)} className="rounded-md bg-white/10 px-2 py-0.5 tabular-nums hover:bg-white/20">−0,5с</button>
             <button
-              onClick={() => { setOffset(0); saveOffset(lyricsId, 0) }}
+              onClick={() => { setOffset(0); saveOffset(effectiveId, 0) }}
               title="reset"
               className="min-w-10 rounded-md px-1 py-0.5 text-center tabular-nums hover:bg-white/10"
             >
