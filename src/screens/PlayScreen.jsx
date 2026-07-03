@@ -199,15 +199,23 @@ export default function PlayScreen({
   }
 
   async function startScoring() {
-    if (!scoringActive) return
+    if (micConsent !== 'on') return
     const duration = playerApiRef.current?.getDuration?.() || 180
     engineRef.current = new ScoreEngine(duration)
     await runAnalysis()
   }
 
   // Přepínač mikrofonu: vypnutí zmrazí skórování (nic se nepočítá),
-  // zapnutí naváže na rozdělané skóre.
+  // zapnutí naváže na rozdělané skóre. Po selhání mikrofonu funguje
+  // jako „zkusit znovu".
   function toggleMic() {
+    if (micFailed) {
+      setMicFailed(false)
+      setMicOn(true)
+      if (engineRef.current) runAnalysis()
+      else startScoring()
+      return
+    }
     if (micOn) {
       stopRef.current?.()
       stopRef.current = null
@@ -218,6 +226,19 @@ export default function PlayScreen({
       if (engineRef.current) runAnalysis()
       else startScoring()
     }
+  }
+
+  // Odchod z písničky: rozzpívané skóre se nezahazuje — když se zpívalo
+  // aspoň chvíli, zapíše se do výsledků.
+  function handleExit() {
+    if (engineRef.current && (engineRef.current.singTime ?? 0) > 8) {
+      const final = engineRef.current.finish()
+      onSongFinished?.({ score: final.score, singerId: singer?.id ?? null, title })
+    }
+    engineRef.current = null
+    stopRef.current?.()
+    stopRef.current = null
+    onExit()
   }
 
   // Přepínač zvuku videa.
@@ -445,16 +466,26 @@ export default function PlayScreen({
 
       {!ended && (
         <div className="absolute top-3 right-3 flex items-center gap-2">
-          {scoringActive && (
+          {micConsent === 'on' && (
             <button
               onClick={toggleMic}
-              aria-label={t(micOn ? 'mic_toggle_off' : 'mic_toggle_on')}
-              title={t(micOn ? 'mic_toggle_off' : 'mic_toggle_on')}
+              aria-label={t(micOn && !micFailed ? 'mic_toggle_off' : 'mic_toggle_on')}
+              title={t(micOn && !micFailed ? 'mic_toggle_off' : 'mic_toggle_on')}
               className={`flex h-9 w-9 items-center justify-center rounded-full border border-line backdrop-blur transition ${
-                micOn ? 'bg-black/60 text-white/85 hover:bg-black/80' : 'bg-red-500/25 text-red-200 hover:bg-red-500/35'
+                micOn && !micFailed ? 'bg-black/60 text-white/85 hover:bg-black/80' : 'bg-red-500/25 text-red-200 hover:bg-red-500/35'
               }`}
             >
-              {micOn ? <Mic size={15} strokeWidth={2} /> : <MicOff size={15} strokeWidth={2} />}
+              {micOn && !micFailed ? <Mic size={15} strokeWidth={2} /> : <MicOff size={15} strokeWidth={2} />}
+            </button>
+          )}
+          {!counting && playerError === null && (
+            <button
+              onClick={finishSong}
+              aria-label={t('finish_song')}
+              title={t('finish_song')}
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-line bg-black/60 text-white/85 backdrop-blur transition hover:bg-black/80"
+            >
+              <SkipForward size={15} strokeWidth={2} />
             </button>
           )}
           <button
@@ -468,7 +499,7 @@ export default function PlayScreen({
             {soundOn ? <Volume2 size={15} strokeWidth={2} /> : <VolumeX size={15} strokeWidth={2} />}
           </button>
           <button
-            onClick={onExit}
+            onClick={handleExit}
             className="flex items-center gap-1.5 rounded-full border border-line bg-black/60 px-4 py-2 text-sm text-white/85 backdrop-blur transition hover:bg-black/80"
           >
             <X size={15} strokeWidth={2} /> {t('exit')}
