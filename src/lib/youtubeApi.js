@@ -118,36 +118,41 @@ export async function searchKaraoke(query, { karaoke = false } = {}) {
     }))
 }
 
+// „— Topic" kanály: YouTube je automaticky generuje z masteru, který label
+// dodává do streamovacích služeb. Je to přesně ta nahrávka, na kterou lidi
+// v LRCLIB text časovali — takže časové značky sedí na vteřinu bez posouvání.
+// Navíc je to jen audio (statický obraz), takže žádný vypálený text a žádné
+// zdvojení s naším překryvem. Přesně tohle chceme.
+const TOPIC_MARKERS = /-\s*topic\b/i
+
+// Náznak jiné oficiální nahrávky (klip s vokálem) — druhá volba za „— Topic".
+const OFFICIAL_MARKERS = /official (music )?video|official audio|\bvevo\b|офіційн|официальн/i
+
 // Video, které má text už vypálený v obraze (karaoke, „lyric video", minus,
-// instrumentál). Takové nechceme — appka si text zobrazuje sama, takže by se
-// text zdvojoval a navíc bývá bez hlavního vokálu.
+// instrumentál) nebo je bez hlavního vokálu — nejhorší volba, řadíme dozadu.
 const BAKED_TEXT_MARKERS =
   /\b(karaoke|sing[\s-]?along|backing track|no vocals?|without vocals?|minus one|lyrics?|lyric video)\b|караоке|мінус|минус|минусовк|інструментал|инструментал|instrumental|з текстом|со словами|текст пісн|текст песн|під фонограму/i
 
-// Náznak, že jde o oficiální / původní nahrávku — takové upřednostníme.
-const OFFICIAL_MARKERS = /official (music )?video|official audio|\bvevo\b|- topic|офіційн|официальн/i
-
-function classifyVideo(v) {
+// Menší číslo = lepší volba: 0 = „— Topic" audio, 1 = jiná oficiální nahrávka,
+// 2 = běžný klip, 3 = karaoke / lyric / instrumentál (text vypálený v obraze).
+function videoRank(v) {
   const hay = `${v.title} ${v.channel}`
-  return { baked: BAKED_TEXT_MARKERS.test(hay), official: OFFICIAL_MARKERS.test(hay) }
+  if (TOPIC_MARKERS.test(v.channel || '')) return 0
+  if (BAKED_TEXT_MARKERS.test(hay)) return 3
+  if (OFFICIAL_MARKERS.test(hay)) return 1
+  return 2
 }
 
-// K vybrané nahrávce (interpret + název + přesná délka) najde YouTube video,
-// jehož délka sedí. Přednost mají PŮVODNÍ klipy — karaoke a „lyric" verze
-// (které mají text vypálený v obraze) řadíme až za ně, ať se text nezdvojuje.
-// Vrací [{videoId, title, channel, durationSec, duration, thumb, diff, baked,
-// official}] seřazené podle vhodnosti — nebo [] když nic délkou nesedí.
+// K vybrané nahrávce (interpret + název + přesná délka) najde YouTube nahrávku,
+// jejíž délka sedí. Přednost má oficiální „— Topic" audio (stejný master, na
+// který je text načasovaný → přesný sync, žádný vypálený text). Karaoke a
+// „lyric" verze jdou úplně dozadu. Vrací [{videoId, title, channel, durationSec,
+// duration, thumb, diff, rank}] seřazené podle vhodnosti — nebo [] když nic
+// délkou nesedí.
 export async function findVideosForTrack(artist, track, targetSec, tolerance = 8) {
   const results = await searchKaraoke(`${artist} ${track}`.trim(), { karaoke: false })
   return results
     .filter((v) => v.durationSec > 0 && Math.abs(v.durationSec - targetSec) <= tolerance)
-    .map((v) => ({ ...v, diff: Math.abs(v.durationSec - targetSec), ...classifyVideo(v) }))
-    .sort((a, b) => {
-      // 1) původní klipy před karaoke/lyric verzemi
-      if (a.baked !== b.baked) return a.baked ? 1 : -1
-      // 2) oficiální nahrávky napřed
-      if (a.official !== b.official) return a.official ? -1 : 1
-      // 3) nejbližší délka
-      return a.diff - b.diff
-    })
+    .map((v) => ({ ...v, diff: Math.abs(v.durationSec - targetSec), rank: videoRank(v) }))
+    .sort((a, b) => (a.rank !== b.rank ? a.rank - b.rank : a.diff - b.diff))
 }

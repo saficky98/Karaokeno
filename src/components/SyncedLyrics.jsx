@@ -84,13 +84,16 @@ function clamp(x) {
   return Math.max(0, Math.min(1, x))
 }
 
+// Velikosti textu. Na hlavní obrazovce (lg) je text teď hlavní obsah, tak je
+// pořádně velký; na telefonu hosta (sm) zůstává drobný jako dřív.
+const SIZES = {
+  lg: { current: 'text-3xl font-bold', next: 'text-lg' },
+  sm: { current: 'text-base font-bold', next: 'text-sm' },
+}
+
 function Line({ line, progress, now, size, current = false }) {
-  const big = current
-  const base = big
-    ? size === 'lg'
-      ? 'text-lg font-bold'
-      : 'text-base font-bold'
-    : 'text-sm'
+  const scale = SIZES[size] ?? SIZES.lg
+  const base = current ? scale.current : scale.next
 
   if (!line) return <p className={`${base} min-h-6`}>&nbsp;</p>
 
@@ -122,7 +125,13 @@ function Line({ line, progress, now, size, current = false }) {
         </p>
       )}
       {needsTransliteration(line.text) && (
-        <p className={`${current ? 'text-sm text-neon-lime' : 'text-xs text-neon-lime/70'} leading-snug`}>
+        <p
+          className={`leading-snug ${
+            current
+              ? `${size === 'lg' ? 'text-lg' : 'text-sm'} text-neon-lime`
+              : 'text-xs text-neon-lime/70'
+          }`}
+        >
           {romanize(line.text)}
         </p>
       )}

@@ -31,7 +31,7 @@ export default function LyricsPanel({ lyricsId, playerApiRef, onClose }) {
   )
 
   return (
-    <div className="absolute inset-x-0 bottom-0 max-h-[38%] overflow-hidden rounded-t-2xl border-t border-line bg-black/80 backdrop-blur-md">
+    <div className="absolute inset-x-0 bottom-0 max-h-[48%] overflow-hidden rounded-t-2xl border-t border-line bg-black/80 backdrop-blur-md">
       <div className="flex items-center gap-2 px-3 pt-2 text-xs text-white/50">
         <span className="flex min-w-0 flex-1 items-center gap-1.5 truncate">
           <Languages size={13} strokeWidth={1.8} className="shrink-0" />
