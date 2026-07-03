@@ -1,15 +1,15 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Languages, X } from 'lucide-react'
-import { fetchLyrics, needsTransliteration, romanize } from '../lib/lyrics.js'
+import { getLyricsById } from '../lib/lyrics.js'
+import SyncedLyrics from './SyncedLyrics.jsx'
 import { useLang } from '../lib/i18n.jsx'
 
-// Panel u spodního okraje: text písně, u cizího písma i přepis výslovnosti.
-// Časovaný text jede podle přehrávače; ± posun řeší jiná intra verzí.
-export default function LyricsPanel({ title, playerApiRef, onClose }) {
+// Panel u spodního okraje: přesně ten text, který byl vybrán při přidání
+// písničky (žádné hádání). ± posun řeší případné odchylky střihu videa.
+export default function LyricsPanel({ lyricsId, playerApiRef, onClose }) {
   const { t } = useLang()
-  const [state, setState] = useState('loading') // loading | ready | empty
   const [lyrics, setLyrics] = useState(null)
-  const [lineIndex, setLineIndex] = useState(-1)
+  const [state, setState] = useState('loading') // loading | ready | empty
   const [offset, setOffset] = useState(0)
   const offsetRef = useRef(0)
   offsetRef.current = offset
@@ -17,44 +17,18 @@ export default function LyricsPanel({ title, playerApiRef, onClose }) {
   useEffect(() => {
     let cancelled = false
     setState('loading')
-
-    // panel se otevírá už při odpočtu — na délku videa chvíli počkáme,
-    // bez ní nejde poznat správná verze písničky
-    async function waitForDuration() {
-      for (let i = 0; i < 15; i++) {
-        const duration = playerApiRef.current?.getDuration?.() ?? 0
-        if (duration > 0) return duration
-        await new Promise((resolve) => setTimeout(resolve, 400))
-        if (cancelled) return 0
-      }
-      return 0
-    }
-
-    waitForDuration()
-      .then((duration) => (cancelled ? null : fetchLyrics(title, duration)))
-      .then((found) => {
-        if (cancelled) return
-        setLyrics(found)
-        setState(found ? 'ready' : 'empty')
-        setLineIndex(-1)
-      })
+    getLyricsById(lyricsId).then((found) => {
+      if (cancelled) return
+      setLyrics(found)
+      setState(found ? 'ready' : 'empty')
+    })
     return () => { cancelled = true }
-  }, [title])
+  }, [lyricsId])
 
-  // sledování času přehrávače pro časovaný text
-  useEffect(() => {
-    if (!lyrics?.synced) return
-    const timer = setInterval(() => {
-      const time = (playerApiRef.current?.getCurrentTime?.() ?? 0) + offsetRef.current
-      let index = -1
-      for (let i = 0; i < lyrics.synced.length; i++) {
-        if (lyrics.synced[i].t <= time) index = i
-        else break
-      }
-      setLineIndex(index)
-    }, 300)
-    return () => clearInterval(timer)
-  }, [lyrics])
+  const getTime = useCallback(
+    () => (playerApiRef.current?.getCurrentTime?.() ?? 0) + offsetRef.current,
+    [playerApiRef],
+  )
 
   return (
     <div className="absolute inset-x-0 bottom-0 max-h-[38%] overflow-hidden rounded-t-2xl border-t border-line bg-black/80 backdrop-blur-md">
@@ -65,9 +39,9 @@ export default function LyricsPanel({ title, playerApiRef, onClose }) {
         </span>
         {lyrics?.synced && (
           <>
-            <button onClick={() => setOffset((o) => o - 2)} className="rounded-md bg-white/10 px-2 py-0.5 hover:bg-white/20">−2с</button>
+            <button onClick={() => setOffset((o) => o - 1)} className="rounded-md bg-white/10 px-2 py-0.5 hover:bg-white/20">−1с</button>
             <span className="tabular-nums">{offset > 0 ? `+${offset}` : offset}с</span>
-            <button onClick={() => setOffset((o) => o + 2)} className="rounded-md bg-white/10 px-2 py-0.5 hover:bg-white/20">+2с</button>
+            <button onClick={() => setOffset((o) => o + 1)} className="rounded-md bg-white/10 px-2 py-0.5 hover:bg-white/20">+1с</button>
           </>
         )}
         <button onClick={onClose} aria-label={t('lyrics_close')} className="rounded-md bg-white/10 p-1 hover:bg-white/20">
@@ -77,45 +51,12 @@ export default function LyricsPanel({ title, playerApiRef, onClose }) {
 
       {state === 'loading' && <p className="animate-pulse p-4 text-center text-sm text-white/60">{t('lyrics_loading')}</p>}
 
-      {state === 'empty' && (
-        <p className="px-4 pb-4 text-center text-sm text-white/60">
-          {t('lyrics_empty')}
-        </p>
-      )}
+      {state === 'empty' && <p className="px-4 pb-4 text-center text-sm text-white/60">{t('lyrics_empty')}</p>}
 
-      {state === 'ready' && lyrics.synced && (
-        <div className="flex flex-col gap-1 p-3 pb-4 text-center">
-          <Line line={lyrics.synced[lineIndex]} current />
-          <Line line={lyrics.synced[lineIndex + 1]} />
+      {state === 'ready' && (
+        <div className="p-3 pb-4">
+          <SyncedLyrics lines={lyrics.synced} getTime={getTime} />
         </div>
-      )}
-
-      {state === 'ready' && !lyrics.synced && lyrics.plain && (
-        <div className="overflow-y-auto p-3 pb-4 text-center" style={{ maxHeight: '26vh' }}>
-          {lyrics.plain.split('\n').map((line, i) => (
-            <p key={i} className="text-sm leading-relaxed text-white/80">
-              {line}
-              {needsTransliteration(line) && (
-                <span className="block text-neon-cyan">{romanize(line)}</span>
-              )}
-            </p>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function Line({ line, current = false }) {
-  if (!line) return <p className="min-h-6">&nbsp;</p>
-  const foreign = needsTransliteration(line.text)
-  return (
-    <div className={current ? '' : 'opacity-45'}>
-      <p className={`${current ? 'text-lg font-bold' : 'text-sm'} leading-snug`}>{line.text}</p>
-      {foreign && (
-        <p className={`${current ? 'text-lg font-bold text-neon-cyan' : 'text-sm text-neon-cyan/80'} leading-snug`}>
-          {romanize(line.text)}
-        </p>
       )}
     </div>
   )

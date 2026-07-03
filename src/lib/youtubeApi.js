@@ -27,12 +27,22 @@ export function absorbKeyFromUrl() {
 }
 
 // PT1H2M3S -> "1:02:03", PT4M13S -> "4:13"
-function formatDuration(iso) {
+function isoToSeconds(iso) {
   const match = /PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/.exec(iso || '')
-  if (!match) return ''
-  const hours = parseInt(match[1] ?? '0', 10) || 0
-  const mins = parseInt(match[2] ?? '0', 10) || 0
-  const secs = parseInt(match[3] ?? '0', 10) || 0
+  if (!match) return 0
+  return (
+    (parseInt(match[1] ?? '0', 10) || 0) * 3600 +
+    (parseInt(match[2] ?? '0', 10) || 0) * 60 +
+    (parseInt(match[3] ?? '0', 10) || 0)
+  )
+}
+
+function formatDuration(iso) {
+  const total = isoToSeconds(iso)
+  if (!total) return ''
+  const hours = Math.floor(total / 3600)
+  const mins = Math.floor((total % 3600) / 60)
+  const secs = total % 60
   const two = (n) => String(n).padStart(2, '0')
   return hours > 0 ? `${hours}:${two(mins)}:${two(secs)}` : `${mins}:${two(secs)}`
 }
@@ -84,7 +94,9 @@ export async function searchKaraoke(query, { karaoke = false } = {}) {
     'https://www.googleapis.com/youtube/v3/videos' +
     `?part=contentDetails&id=${ids.join(',')}&key=${encodeURIComponent(key)}`
   const videos = await callApi(videosUrl)
-  const durations = new Map((videos.items ?? []).map((v) => [v.id, formatDuration(v.contentDetails?.duration)]))
+  const durations = new Map(
+    (videos.items ?? []).map((v) => [v.id, isoToSeconds(v.contentDetails?.duration)]),
+  )
 
   const decode = (text) => {
     const el = document.createElement('textarea')
@@ -98,7 +110,21 @@ export async function searchKaraoke(query, { karaoke = false } = {}) {
       videoId: item.id.videoId,
       title: decode(item.snippet?.title),
       channel: decode(item.snippet?.channelTitle),
-      duration: durations.get(item.id.videoId) ?? '',
+      durationSec: durations.get(item.id.videoId) ?? 0,
+      duration: durations.get(item.id.videoId)
+        ? formatDuration(`PT${durations.get(item.id.videoId)}S`)
+        : '',
       thumb: item.snippet?.thumbnails?.medium?.url ?? `https://img.youtube.com/vi/${item.id.videoId}/mqdefault.jpg`,
     }))
+}
+
+// K vybrané nahrávce (interpret + název + přesná délka) najde YouTube video,
+// jehož délka sedí. Vrací [{videoId, title, channel, durationSec, duration,
+// thumb, diff}] seřazené podle shody délky — nebo [] když nic nesedí.
+export async function findVideosForTrack(artist, track, targetSec, tolerance = 5) {
+  const results = await searchKaraoke(`${artist} ${track}`.trim(), { karaoke: false })
+  return results
+    .filter((v) => v.durationSec > 0 && Math.abs(v.durationSec - targetSec) <= tolerance)
+    .map((v) => ({ ...v, diff: Math.abs(v.durationSec - targetSec) }))
+    .sort((a, b) => a.diff - b.diff)
 }

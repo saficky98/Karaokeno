@@ -24,7 +24,7 @@ export default function SearchScreen({ players, queueLength, onAddSong, onGoToPl
 
   function pick(song) {
     const singer = players.find((p) => String(p.id) === (singerId ?? defaultSingerId)) ?? players[0]
-    onAddSong(song.videoId, song.title, singer.id)
+    onAddSong(song.videoId, song.title, singer.id, song.lyricsId ?? null)
     setAdded(t('added_to_queue', { title: song.title ?? t('a_song'), name: singer.name }))
     setSingerId(null)
     setTimeout(() => setAdded(null), 3000)

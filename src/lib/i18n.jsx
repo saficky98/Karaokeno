@@ -61,7 +61,7 @@ const STR = {
     delete_player: 'Видалити гравця {name}',
     delete_song: 'Видалити пісню',
 
-    search_sub_original: 'Знайдемо оригінальний кліп — текст покажемо прямо в застосунку.',
+    search_sub_original: 'Шукаємо пісні з перевіреним синхронним текстом — відео добереться саме.',
     search_sub_karaoke: 'Напиши назву — «караоке» додамо самі.',
     mode_original: 'Оригінал',
     mode_karaoke: 'Караоке',
@@ -110,9 +110,12 @@ const STR = {
     last_performances: 'Останні виступи',
 
     lyrics_title: 'Текст пісні',
-    lyrics_loading: 'Шукаю текст пісні…',
-    lyrics_empty: 'Текст цієї пісні не знайшовся у базі. Так буває у реміксів, попурі та рідкісних версій.',
+    lyrics_loading: 'Завантажую текст…',
+    lyrics_empty: 'Текст не вдалося завантажити. Перевір інтернет.',
     lyrics_close: 'Закрити текст',
+    no_songs_found: 'Пісня з синхронним текстом не знайшлася. Спробуй інакше написати назву — або перемкнись на «Караоке».',
+    finding_video: 'Шукаю відео з цією версією пісні…',
+    no_video_match: 'Не знайшлося відео, що збігається з цією версією. Спробуй іншу версію пісні.',
 
     room_section: 'Спільна кімната',
     room_create: 'Створити кімнату',
@@ -208,7 +211,7 @@ const STR = {
     delete_player: 'Smazat hráče {name}',
     delete_song: 'Smazat písničku',
 
-    search_sub_original: 'Najdeme originální klip — text ukážeme přímo v aplikaci.',
+    search_sub_original: 'Hledáme písničky s ověřeným synchronizovaným textem — video se dohledá samo.',
     search_sub_karaoke: 'Napiš název — „karaoke“ přidáme sami.',
     mode_original: 'Originál',
     mode_karaoke: 'Karaoke',
@@ -257,9 +260,12 @@ const STR = {
     last_performances: 'Poslední vystoupení',
 
     lyrics_title: 'Text písničky',
-    lyrics_loading: 'Hledám text písničky…',
-    lyrics_empty: 'Text téhle písničky v databázi není. Stává se to u remixů, směsí a vzácných verzí.',
+    lyrics_loading: 'Načítám text…',
+    lyrics_empty: 'Text se nepodařilo načíst. Zkontroluj internet.',
     lyrics_close: 'Zavřít text',
+    no_songs_found: 'Písnička se synchronizovaným textem se nenašla. Zkus název napsat jinak — nebo přepni na „Karaoke“.',
+    finding_video: 'Hledám video s touhle verzí písničky…',
+    no_video_match: 'Nenašlo se video odpovídající téhle verzi. Zkus jinou verzi písničky.',
 
     room_section: 'Sdílená místnost',
     room_create: 'Vytvořit místnost',
