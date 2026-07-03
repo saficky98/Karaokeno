@@ -48,18 +48,24 @@ function GuestInner({ room, persisted, lang, setLang }) {
     let disposed = false
     let api = null
     import('../lib/room.js').then(async ({ connectRoom }) => {
-      api = await connectRoom({
-        roomId: room.id,
-        secret: room.secret,
-        role: 'guest',
-        onRoom: (state) => {
-          if (state?.nowPlaying?.pos != null) {
-            anchorRef.current = { pos: state.nowPlaying.pos, at: performance.now() }
-          }
-          setRoomState(state)
-        },
-        onStatus: setStatus,
-      })
+      try {
+        api = await connectRoom({
+          roomId: room.id,
+          secret: room.secret,
+          role: 'guest',
+          onRoom: (state) => {
+            if (state?.nowPlaying?.pos != null) {
+              anchorRef.current = { pos: state.nowPlaying.pos, at: performance.now() }
+            }
+            setRoomState(state)
+          },
+          onStatus: setStatus,
+        })
+      } catch {
+        // poškozený odkaz místnosti — hlásíme offline místo pádu celé appky
+        if (!disposed) setStatus('offline')
+        return
+      }
       if (disposed) {
         api.end()
         return

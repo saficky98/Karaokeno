@@ -118,13 +118,51 @@ export async function searchKaraoke(query, { karaoke = false } = {}) {
     }))
 }
 
-// K vybrané nahrávce (interpret + název + přesná délka) najde YouTube video,
-// jehož délka sedí. Vrací [{videoId, title, channel, durationSec, duration,
-// thumb, diff}] seřazené podle shody délky — nebo [] když nic nesedí.
-export async function findVideosForTrack(artist, track, targetSec, tolerance = 5) {
+// „— Topic" kanály: YouTube je automaticky generuje z masteru, který label
+// dodává do streamovacích služeb. Je to přesně ta nahrávka, na kterou lidi
+// v LRCLIB text časovali — takže časové značky sedí na vteřinu bez posouvání.
+// Navíc je to jen audio (statický obraz), takže žádný vypálený text a žádné
+// zdvojení s naším překryvem. Přesně tohle chceme.
+const TOPIC_MARKERS = /-\s*topic\b/i
+
+// Náznak jiné oficiální nahrávky (klip s vokálem) — druhá volba za „— Topic".
+const OFFICIAL_MARKERS = /official (music )?video|official audio|\bvevo\b|офіційн|официальн/i
+
+// Video, které má text už vypálený v obraze (karaoke, „lyric video", minus,
+// instrumentál) nebo je bez hlavního vokálu — nejhorší volba, řadíme dozadu.
+const BAKED_TEXT_MARKERS =
+  /\b(karaoke|sing[\s-]?along|backing track|no vocals?|without vocals?|minus one|lyrics?|lyric video)\b|караоке|мінус|минус|минусовк|інструментал|инструментал|instrumental|з текстом|со словами|текст пісн|текст песн|під фонограму/i
+
+// Menší číslo = lepší volba: 0 = „— Topic" audio, 1 = jiná oficiální nahrávka,
+// 2 = běžný klip, 3 = karaoke / lyric / instrumentál (text vypálený v obraze).
+function videoRank(v) {
+  const hay = `${v.title} ${v.channel}`
+  if (TOPIC_MARKERS.test(v.channel || '')) return 0
+  if (BAKED_TEXT_MARKERS.test(hay)) return 3
+  if (OFFICIAL_MARKERS.test(hay)) return 1
+  return 2
+}
+
+// K vybrané nahrávce (interpret + název + přesná délka) najde YouTube nahrávku,
+// jejíž délka sedí. Přednost má oficiální „— Topic" audio (stejný master, na
+// který je text načasovaný → přesný sync, žádný vypálený text). Karaoke a
+// „lyric" verze jdou úplně dozadu. Vrací [{videoId, title, channel, durationSec,
+// duration, thumb, diff, rank}] seřazené podle vhodnosti — nebo [] když nic
+// délkou nesedí.
+export async function findVideosForTrack(artist, track, targetSec, tolerance = 8) {
   const results = await searchKaraoke(`${artist} ${track}`.trim(), { karaoke: false })
   return results
     .filter((v) => v.durationSec > 0 && Math.abs(v.durationSec - targetSec) <= tolerance)
-    .map((v) => ({ ...v, diff: Math.abs(v.durationSec - targetSec) }))
-    .sort((a, b) => a.diff - b.diff)
+    .map((v) => ({ ...v, diff: Math.abs(v.durationSec - targetSec), rank: videoRank(v) }))
+    // „Prakticky stejná délka" = skoro jistě stejná nahrávka; drž ji vepředu.
+    // Jinak by přednost „— Topic" mohla vybrat jiný master (live / remaster /
+    // rozšířenou verzi) jen proto, že je Topic, a text z LRCLIB by nesedl.
+    // Teprve mezi stejně blízkými rozhoduje typ zdroje a pak nejmenší rozdíl.
+    .sort((a, b) => {
+      const closeA = a.diff <= 2 ? 0 : a.diff <= 4 ? 1 : 2
+      const closeB = b.diff <= 2 ? 0 : b.diff <= 4 ? 1 : 2
+      if (closeA !== closeB) return closeA - closeB
+      if (a.rank !== b.rank) return a.rank - b.rank
+      return a.diff - b.diff
+    })
 }
