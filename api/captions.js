@@ -37,6 +37,23 @@ async function playerViaInnertube(videoId) {
   return res.json()
 }
 
+// Druhá cesta: InnerTube s klientem WEB — jiná bot-ochrana než ANDROID,
+// z datacenter IP často projde právě jedna z nich.
+async function playerViaInnertubeWeb(videoId) {
+  const res = await fetch('https://www.youtube.com/youtubei/v1/player?prettyPrint=false', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'user-agent': BROWSER_UA },
+    body: JSON.stringify({
+      videoId,
+      context: {
+        client: { clientName: 'WEB', clientVersion: '2.20250101.00.00', hl: 'en', gl: 'US' },
+      },
+    }),
+  })
+  if (!res.ok) return null
+  return res.json()
+}
+
 // Záloha: stránka videa obsahuje ytInitialPlayerResponse s captionTracks.
 async function playerViaWatchPage(videoId) {
   const res = await fetch(`https://www.youtube.com/watch?v=${videoId}&hl=en`, {
@@ -115,17 +132,13 @@ export default async function handler(req, res) {
   }
 
   let track = null
-  try {
-    track = pickTrack(await playerViaInnertube(videoId), wantLang)
-  } catch {
-    // spadneme na watch page
-  }
-  if (!track?.baseUrl) {
+  for (const strategy of [playerViaInnertube, playerViaInnertubeWeb, playerViaWatchPage]) {
     try {
-      track = pickTrack(await playerViaWatchPage(videoId), wantLang)
+      track = pickTrack(await strategy(videoId), wantLang)
     } catch {
       track = null
     }
+    if (track?.baseUrl) break
   }
   if (!track?.baseUrl) {
     res.setHeader('Cache-Control', 's-maxage=3600')

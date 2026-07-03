@@ -104,8 +104,10 @@ export default function LyricsPanel({ videoId, lyricsId, playerApiRef, onClose, 
         if (cancelled) return
         if (found) useFound(found)
         else {
-          setState('hidden')
+          // krátce řekneme, že text neexistuje, a pak zmizíme — žádné mlčení
+          setState('notfound')
           onResolved?.(null)
+          retimer = setTimeout(() => setState('hidden'), 6000)
         }
       })
     }
@@ -153,6 +155,17 @@ export default function LyricsPanel({ videoId, lyricsId, playerApiRef, onClose, 
   const offsetLabel = `${offset > 0 ? '+' : ''}${offset % 1 === 0 ? offset : offset.toFixed(1)}с`
 
   if (state === 'hidden') return null // text neexistuje — bez panelu i cedule
+
+  // Text se nenašel (titulky ani LRCLIB): krátká nenápadná zpráva, pak zmizí.
+  if (state === 'notfound') {
+    return (
+      <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
+        <p className="rounded-full bg-black/70 px-4 py-2 text-xs text-white/60 backdrop-blur">
+          {t('lyrics_notfound')}
+        </p>
+      </div>
+    )
+  }
 
   return (
     <div className="absolute inset-x-0 bottom-0 max-h-[52%] overflow-hidden rounded-t-2xl border-t border-line bg-black/80 backdrop-blur-md">
