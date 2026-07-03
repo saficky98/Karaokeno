@@ -330,15 +330,6 @@ export default function PlayScreen({
         <Countdown onDone={() => { setCounting(false); ensurePlaying() }} />
       )}
 
-      {needsUnmute && !ended && playerError === null && !counting && (
-        <button
-          onClick={() => { playerApiRef.current?.unMute?.(); setSoundOn(true); setNeedsUnmute(false) }}
-          className="btn-primary absolute bottom-16 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2"
-        >
-          <Volume2 size={18} strokeWidth={2} /> {t('unmute')}
-        </button>
-      )}
-
       {showLyrics && !ended && playerError === null && (
         <Suspense fallback={null}>
           <LyricsPanel
@@ -365,19 +356,79 @@ export default function PlayScreen({
         </button>
       )}
 
-      {live && !ended && playerError === null && (
-        <LiveScoreHUD score={live.score} level={live.level} singing={live.singing} />
-      )}
+      {/* Horní lišta: chip zpěváka vlevo, ovládání vpravo, pod nimi živé
+          skóre a případné „Zapnout zvuk" — vše ve flow layoutu, takže se
+          prvky nikdy nepřekrývají ani na úzkém telefonu. */}
+      {!ended && (
+        <div className="pointer-events-none absolute inset-x-0 top-0 flex flex-col gap-2 p-3">
+          <div className="flex items-start justify-between gap-2">
+            {singer ? (
+              <div
+                className="pointer-events-auto flex min-w-0 items-center gap-2 rounded-full bg-black/60 py-1 pr-3.5 pl-1 text-sm backdrop-blur"
+                style={{ border: `1px solid ${singer.color}66` }}
+              >
+                <Avatar player={singer} size="sm" />
+                <span className="max-w-32 truncate font-bold" style={{ color: singer.color }}>
+                  {singer.name}
+                </span>
+              </div>
+            ) : (
+              <span />
+            )}
+            <div className="pointer-events-auto flex shrink-0 items-center gap-2">
+              {micConsent === 'on' && (
+                <button
+                  onClick={toggleMic}
+                  aria-label={t(micOn && !micFailed ? 'mic_toggle_off' : 'mic_toggle_on')}
+                  title={t(micOn && !micFailed ? 'mic_toggle_off' : 'mic_toggle_on')}
+                  className={`flex h-9 w-9 items-center justify-center rounded-full border border-line backdrop-blur transition ${
+                    micOn && !micFailed ? 'bg-black/60 text-white/85 hover:bg-black/80' : 'bg-red-500/25 text-red-200 hover:bg-red-500/35'
+                  }`}
+                >
+                  {micOn && !micFailed ? <Mic size={15} strokeWidth={2} /> : <MicOff size={15} strokeWidth={2} />}
+                </button>
+              )}
+              {!counting && playerError === null && (
+                <button
+                  onClick={finishSong}
+                  aria-label={t('finish_song')}
+                  title={t('finish_song')}
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-line bg-black/60 text-white/85 backdrop-blur transition hover:bg-black/80"
+                >
+                  <SkipForward size={15} strokeWidth={2} />
+                </button>
+              )}
+              <button
+                onClick={toggleSound}
+                aria-label={t(soundOn ? 'sound_toggle_off' : 'sound_toggle_on')}
+                title={t(soundOn ? 'sound_toggle_off' : 'sound_toggle_on')}
+                className={`flex h-9 w-9 items-center justify-center rounded-full border border-line backdrop-blur transition ${
+                  soundOn ? 'bg-black/60 text-white/85 hover:bg-black/80' : 'bg-red-500/25 text-red-200 hover:bg-red-500/35'
+                }`}
+              >
+                {soundOn ? <Volume2 size={15} strokeWidth={2} /> : <VolumeX size={15} strokeWidth={2} />}
+              </button>
+              <button
+                onClick={handleExit}
+                className="flex items-center gap-1.5 rounded-full border border-line bg-black/60 px-4 py-2 text-sm text-white/85 backdrop-blur transition hover:bg-black/80"
+              >
+                <X size={15} strokeWidth={2} /> {t('exit')}
+              </button>
+            </div>
+          </div>
 
-      {singer && !ended && (
-        <div
-          className="absolute top-3 left-3 flex items-center gap-2 rounded-full bg-black/60 py-1 pr-3.5 pl-1 text-sm backdrop-blur"
-          style={{ border: `1px solid ${singer.color}66` }}
-        >
-          <Avatar player={singer} size="sm" />
-          <span className="max-w-32 truncate font-bold" style={{ color: singer.color }}>
-            {singer.name}
-          </span>
+          {live && playerError === null && (
+            <LiveScoreHUD score={live.score} level={live.level} singing={live.singing} />
+          )}
+
+          {needsUnmute && playerError === null && !counting && (
+            <button
+              onClick={() => { playerApiRef.current?.unMute?.(); setSoundOn(true); setNeedsUnmute(false) }}
+              className="btn-primary pointer-events-auto flex items-center gap-2 self-center"
+            >
+              <Volume2 size={18} strokeWidth={2} /> {t('unmute')}
+            </button>
+          )}
         </div>
       )}
 
@@ -464,48 +515,6 @@ export default function PlayScreen({
         </div>
       )}
 
-      {!ended && (
-        <div className="absolute top-3 right-3 flex items-center gap-2">
-          {micConsent === 'on' && (
-            <button
-              onClick={toggleMic}
-              aria-label={t(micOn && !micFailed ? 'mic_toggle_off' : 'mic_toggle_on')}
-              title={t(micOn && !micFailed ? 'mic_toggle_off' : 'mic_toggle_on')}
-              className={`flex h-9 w-9 items-center justify-center rounded-full border border-line backdrop-blur transition ${
-                micOn && !micFailed ? 'bg-black/60 text-white/85 hover:bg-black/80' : 'bg-red-500/25 text-red-200 hover:bg-red-500/35'
-              }`}
-            >
-              {micOn && !micFailed ? <Mic size={15} strokeWidth={2} /> : <MicOff size={15} strokeWidth={2} />}
-            </button>
-          )}
-          {!counting && playerError === null && (
-            <button
-              onClick={finishSong}
-              aria-label={t('finish_song')}
-              title={t('finish_song')}
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-line bg-black/60 text-white/85 backdrop-blur transition hover:bg-black/80"
-            >
-              <SkipForward size={15} strokeWidth={2} />
-            </button>
-          )}
-          <button
-            onClick={toggleSound}
-            aria-label={t(soundOn ? 'sound_toggle_off' : 'sound_toggle_on')}
-            title={t(soundOn ? 'sound_toggle_off' : 'sound_toggle_on')}
-            className={`flex h-9 w-9 items-center justify-center rounded-full border border-line backdrop-blur transition ${
-              soundOn ? 'bg-black/60 text-white/85 hover:bg-black/80' : 'bg-red-500/25 text-red-200 hover:bg-red-500/35'
-            }`}
-          >
-            {soundOn ? <Volume2 size={15} strokeWidth={2} /> : <VolumeX size={15} strokeWidth={2} />}
-          </button>
-          <button
-            onClick={handleExit}
-            className="flex items-center gap-1.5 rounded-full border border-line bg-black/60 px-4 py-2 text-sm text-white/85 backdrop-blur transition hover:bg-black/80"
-          >
-            <X size={15} strokeWidth={2} /> {t('exit')}
-          </button>
-        </div>
-      )}
     </div>
   )
 }

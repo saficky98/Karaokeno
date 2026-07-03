@@ -69,17 +69,43 @@ async function callApi(url) {
   return response.json()
 }
 
+// Bezklíčové vyhledávání přes naši serverovou funkci /api/search
+// (InnerTube). Vrací stejný tvar výsledků jako Data API, nebo null když
+// funkce neběží (statický hosting) či selže — pak přijde na řadu klíč.
+async function searchViaServer(query) {
+  try {
+    const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`)
+    if (!res.ok) return null
+    const data = await res.json()
+    if (!Array.isArray(data?.items) || data.items.length === 0) return null
+    return data.items.map((item) => ({
+      videoId: item.videoId,
+      title: item.title,
+      channel: item.channel ?? '',
+      durationSec: item.durationSec ?? 0,
+      duration: item.durationSec ? formatDuration(`PT${item.durationSec}S`) : '',
+      thumb: `https://img.youtube.com/vi/${item.videoId}/mqdefault.jpg`,
+    }))
+  } catch {
+    return null
+  }
+}
+
 // Vyhledá písničky. V režimu karaoke automaticky přidá slovo „karaoke",
 // v režimu originál hledá běžné klipy (text pak zobrazí appka sama).
+// Nejdřív bezklíčová serverová cesta, záložně YouTube Data API s klíčem.
 // Vrací [{videoId, title, channel, duration, thumb}].
 // Chyby: {type: 'nokey' | 'quota' | 'key' | 'network'}
 export async function searchKaraoke(query, { karaoke = false } = {}) {
-  const key = getApiKey()
-  if (!key) throw { type: 'nokey' }
-
   const hasKaraoke = /караоке|karaoke/i.test(query)
   const suffix = /[Ѐ-ӿ]/.test(query) ? 'караоке' : 'karaoke'
   const fullQuery = karaoke && !hasKaraoke ? `${query} ${suffix}` : query
+
+  const viaServer = await searchViaServer(fullQuery)
+  if (viaServer) return viaServer
+
+  const key = getApiKey()
+  if (!key) throw { type: 'nokey' }
 
   const searchUrl =
     'https://www.googleapis.com/youtube/v3/search' +

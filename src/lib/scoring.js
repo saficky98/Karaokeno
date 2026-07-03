@@ -34,11 +34,18 @@ export class ScoreEngine {
     if (rms < this.noiseFloor) {
       this.noiseFloor = this.noiseFloor * 0.7 + rms * 0.3
     } else {
-      const rise = f0 ? 1.0008 : 1.004
+      // se zřetelným tónem (zpěvák) stoupá jen nepatrně — jinak by práh
+      // při dlouhé sloce bez nádechu dohnal zpěváka a body by přestaly
+      const rise = f0 ? 1.0001 : 1.004
       this.noiseFloor = Math.min(this.noiseFloor * rise + 0.00003, rms)
     }
 
-    const threshold = Math.max(ABSOLUTE_FLOOR, this.noiseFloor * 1.35)
+    let threshold = Math.max(ABSOLUTE_FLOOR, this.noiseFloor * 1.35)
+    // pojistka: práh nikdy nepřeroste běžnou hlasitost TOHOTO zpěváka —
+    // koho jsme už slyšeli zpívat, toho hladina pozadí nesmí odstřihnout
+    if (this.voicedFrames > 100) {
+      threshold = Math.min(threshold, Math.max(ABSOLUTE_FLOOR, this.voicedAvg * 0.75))
+    }
     const singing = rms > threshold
 
     if (!singing) {
