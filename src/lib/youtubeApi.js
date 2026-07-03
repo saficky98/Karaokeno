@@ -70,14 +70,15 @@ async function callApi(url) {
 }
 
 // Bezklíčové vyhledávání přes naši serverovou funkci /api/search
-// (InnerTube). Vrací stejný tvar výsledků jako Data API, nebo null když
-// funkce neběží (statický hosting) či selže — pak přijde na řadu klíč.
+// (InnerTube). Vrací stejný tvar výsledků jako Data API (i prázdné pole,
+// když funkce úspěšně odpoví, ale nic nenajde), nebo null když funkce
+// neběží (statický hosting) či selže — teprve pak přijde na řadu klíč.
 async function searchViaServer(query) {
   try {
     const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`)
     if (!res.ok) return null
     const data = await res.json()
-    if (!Array.isArray(data?.items) || data.items.length === 0) return null
+    if (!Array.isArray(data?.items)) return null
     return data.items.map((item) => ({
       videoId: item.videoId,
       title: item.title,
@@ -96,6 +97,14 @@ async function searchViaServer(query) {
 // Nejdřív bezklíčová serverová cesta, záložně YouTube Data API s klíčem.
 // Vrací [{videoId, title, channel, duration, thumb}].
 // Chyby: {type: 'nokey' | 'quota' | 'key' | 'network'}
+//
+// POZNÁMKA: bezklíčová cesta (na rozdíl od Data API s videoEmbeddable=true)
+// nefiltruje videa se zakázaným vkládáním do iframe — občas se tak do
+// výsledků dostane nepřehratelné video. PlayScreen na to reaguje jasnou
+// chybovou hláškou a tlačítkem „další píseň", takže appka nespadne, jen
+// si uživatel občas přeskočí jednu položku. Spolehlivá filtrace by
+// vyžadovala dotaz na player endpoint pro každý kandidát zvlášť (viz
+// api/captions.js) — pro seznam až 12 výsledků by to bylo příliš pomalé.
 export async function searchKaraoke(query, { karaoke = false } = {}) {
   const hasKaraoke = /караоке|karaoke/i.test(query)
   const suffix = /[Ѐ-ӿ]/.test(query) ? 'караоке' : 'karaoke'

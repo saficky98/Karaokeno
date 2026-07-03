@@ -100,4 +100,18 @@ describe('discoverLyricsForVideo', () => {
     expect(found?.id).toBe(7)
     expect(queries).toContain('Song')
   })
+
+  it('volné dohledání (do 8s) použije, jen když allowLoose je true', async () => {
+    // kandidát sedí do 8 s, ale ne do výchozí přesné tolerance 2,5 s
+    vi.stubGlobal('fetch', async () => ({
+      ok: true,
+      json: async () => [{ id: 9, artistName: 'Artist', trackName: 'Song', duration: 209, syncedLyrics: '[00:01.00]Hi' }],
+    }))
+
+    const strict = await discoverLyricsForVideo({ title: 'Artist - Song', author: '', duration: 204 }, 2.5, false)
+    expect(strict).toBeNull()
+
+    const loose = await discoverLyricsForVideo({ title: 'Artist - Song', author: '', duration: 204 }, 2.5, true)
+    expect(loose?.id).toBe(9)
+  })
 })

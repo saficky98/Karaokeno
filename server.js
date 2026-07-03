@@ -67,7 +67,15 @@ async function serveStatic(req, res) {
   }
 
   const url = new URL(req.url, 'http://localhost')
-  let filePath = resolveStaticPath(decodeURIComponent(url.pathname))
+  let decodedPath
+  try {
+    decodedPath = decodeURIComponent(url.pathname)
+  } catch {
+    // neplatné procentové escape (např. useknutá UTF-8 sekvence) — 400, ne pád
+    res.writeHead(400).end()
+    return
+  }
+  let filePath = resolveStaticPath(decodedPath)
   if (!filePath) {
     res.writeHead(403).end()
     return
@@ -98,14 +106,29 @@ async function serveStatic(req, res) {
   }
 }
 
-createServer((req, res) => {
+// Vyexportováno samostatně, aby šlo request handler otestovat bez
+// nutnosti reálně poslouchat na síťovém portu.
+export function handleRequest(req, res) {
   const url = new URL(req.url, 'http://localhost')
   const apiHandler = apiRoutes[url.pathname]
   if (apiHandler) {
     handleApi(req, res, apiHandler)
     return
   }
-  serveStatic(req, res)
-}).listen(port, () => {
-  console.log(`Karaokeno běží na http://localhost:${port}`)
-})
+  // serveStatic je async — bez zachycení by jakákoli neočekávaná chyba
+  // (i mimo ošetřený dekódovací případ výše) skončila jako unhandled
+  // rejection a v produkčním Node procesu shodila celý server.
+  serveStatic(req, res).catch(() => {
+    if (!res.headersSent) res.writeHead(500).end()
+    else res.end()
+  })
+}
+
+// Server se skutečně spustí, jen když je tento soubor spuštěn přímo
+// (`node server.js` / `npm start`) — import kvůli testům ho nechá stát.
+const isMain = process.argv[1] && import.meta.url === `file://${process.argv[1]}`
+if (isMain) {
+  createServer(handleRequest).listen(port, () => {
+    console.log(`Karaokeno běží na http://localhost:${port}`)
+  })
+}
