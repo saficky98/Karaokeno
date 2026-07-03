@@ -113,6 +113,7 @@ const STR = {
     last_performances: 'Останні виступи',
 
     lyrics_title: 'Текст пісні',
+    lyrics_from_video: 'Текст із цього відео',
     lyrics_loading: 'Завантажую текст…',
     lyrics_empty: 'Текст не вдалося завантажити. Перевір інтернет.',
     lyrics_close: 'Закрити текст',
@@ -266,6 +267,7 @@ const STR = {
     last_performances: 'Poslední vystoupení',
 
     lyrics_title: 'Text písničky',
+    lyrics_from_video: 'Text z tohoto videa',
     lyrics_loading: 'Načítám text…',
     lyrics_empty: 'Text se nepodařilo načíst. Zkontroluj internet.',
     lyrics_close: 'Zavřít text',

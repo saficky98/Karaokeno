@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Camera, Check, ListMusic, Mic, Radio, Trophy, X } from 'lucide-react'
 import { getLyricsById } from '../lib/lyrics.js'
+import { fetchVideoCaptions } from '../lib/captions.js'
 import SyncedLyrics from '../components/SyncedLyrics.jsx'
 import SongPicker from '../components/SongPicker.jsx'
 import Avatar from '../components/Avatar.jsx'
@@ -340,8 +341,12 @@ function RoomView({ roomState, anchorRef }) {
               {nowSinger?.name}{roomState.nowPlaying.title ? ` — ${roomState.nowPlaying.title}` : ''}
             </span>
           </div>
-          {roomState.nowPlaying.lyricsId && (
-            <GuestLyrics lyricsId={roomState.nowPlaying.lyricsId} anchorRef={anchorRef} />
+          {(roomState.nowPlaying.videoId || roomState.nowPlaying.lyricsId) && (
+            <GuestLyrics
+              videoId={roomState.nowPlaying.videoId ?? null}
+              lyricsId={roomState.nowPlaying.lyricsId ?? null}
+              anchorRef={anchorRef}
+            />
           )}
         </div>
       )}
@@ -395,17 +400,27 @@ function RoomView({ roomState, anchorRef }) {
 
 // Živý text právě hrané písničky na telefonu hosta. Pozice přichází od
 // pořadatele každých pár sekund; mezi aktualizacemi čas dopočítáváme.
-function GuestLyrics({ lyricsId, anchorRef }) {
+// Zdroje stejně jako u pořadatele: titulky videa napřed, pak LRCLIB.
+function GuestLyrics({ videoId, lyricsId, anchorRef }) {
   const [lyrics, setLyrics] = useState(null)
 
   useEffect(() => {
     let cancelled = false
     setLyrics(null)
-    getLyricsById(lyricsId).then((found) => {
-      if (!cancelled) setLyrics(found)
+    const viaCaptions = videoId ? fetchVideoCaptions(videoId) : Promise.resolve(null)
+    viaCaptions.then((caps) => {
+      if (cancelled) return
+      if (caps) {
+        setLyrics({ synced: caps.lines })
+        return
+      }
+      if (lyricsId == null) return
+      getLyricsById(lyricsId).then((found) => {
+        if (!cancelled) setLyrics(found)
+      })
     })
     return () => { cancelled = true }
-  }, [lyricsId])
+  }, [videoId, lyricsId])
 
   const getTime = useCallback(() => {
     const anchor = anchorRef.current

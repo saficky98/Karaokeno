@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Languages, X } from 'lucide-react'
 import { getLyricsById, findLyricsForDuration, discoverLyricsForVideo } from '../lib/lyrics.js'
+import { fetchVideoCaptions } from '../lib/captions.js'
 import SyncedLyrics from './SyncedLyrics.jsx'
 import { useLang } from '../lib/i18n.jsx'
 
@@ -27,14 +28,14 @@ function saveOffset(lyricsId, value) {
   }
 }
 
-// Panel u spodního okraje. Dvě cesty k textu:
-// - lyricsId je známé (vybráno při přidání) → načte se přesně ten text
-//   a ověří se, že sedí na délku hrající nahrávky (jinak výměna verze),
-// - lyricsId chybí (písnička z odkazu, karaoke fallback, stará fronta) →
-//   text se DOHLEDÁ z názvu videa, kanálu a přesné délky nahrávky.
-// ± posun řeší zbylé odchylky a pamatuje se k použité verzi textu.
+// Panel u spodního okraje. Zdroje textu podle přesnosti:
+// 1. TITULKY PŘÍMO Z VIDEA (/api/captions) — časově přesné z principu,
+//    často i s časy jednotlivých slov; žádné párování verzí,
+// 2. lyricsId z LRCLIB (vybráno při přidání) + kontrola délky nahrávky,
+// 3. dohledání v LRCLIB z názvu videa, kanálu a přesné délky.
+// ± posun řeší zbylé odchylky a pamatuje se k použitému zdroji textu.
 // onResolved(id|null) hlásí rodiči, jaký text se nakonec používá.
-export default function LyricsPanel({ lyricsId, playerApiRef, onClose, onResolved }) {
+export default function LyricsPanel({ videoId, lyricsId, playerApiRef, onClose, onResolved }) {
   const { t } = useLang()
   const [lyrics, setLyrics] = useState(null)
   const [state, setState] = useState('loading') // loading | ready | empty | hidden
@@ -45,6 +46,7 @@ export default function LyricsPanel({ lyricsId, playerApiRef, onClose, onResolve
 
   useEffect(() => {
     if (lyricsId != null && String(lyricsId) === String(resolvedRef.current)) return // už hraje
+    if (resolvedRef.current === `yt:${videoId}`) return // titulky videa už běží
 
     let cancelled = false
     let retimer = null
@@ -59,19 +61,33 @@ export default function LyricsPanel({ lyricsId, playerApiRef, onClose, onResolve
       onResolved?.(found.id)
     }
 
-    if (lyricsId != null) {
-      getLyricsById(lyricsId).then((found) => {
-        if (cancelled) return
-        if (!found) {
-          setState('empty')
-          return
-        }
-        useFound(found)
-        scheduleRematch(found)
-      })
-    } else {
-      discover()
-    }
+    // 1) titulky přímo z videa — když existují, není co řešit
+    fetchVideoCaptions(videoId).then((caps) => {
+      if (cancelled) return
+      if (caps) {
+        useFound({
+          id: `yt:${videoId}`,
+          synced: caps.lines,
+          match: `${t('lyrics_from_video')}${caps.lang ? ` · ${caps.lang}` : ''}`,
+          duration: 0,
+        })
+        return
+      }
+      // 2) + 3) LRCLIB cesty
+      if (lyricsId != null) {
+        getLyricsById(lyricsId).then((found) => {
+          if (cancelled) return
+          if (!found) {
+            setState('empty')
+            return
+          }
+          useFound(found)
+          scheduleRematch(found)
+        })
+      } else {
+        discover()
+      }
+    })
 
     // Bez lyricsId: počkáme, až přehrávač zná metadata + délku, a text
     // dohledáme. Když neexistuje, panel zmizí (žádná otravná cedule).
@@ -116,7 +132,7 @@ export default function LyricsPanel({ lyricsId, playerApiRef, onClose, onResolve
       cancelled = true
       clearTimeout(retimer)
     }
-  }, [lyricsId])
+  }, [videoId, lyricsId])
 
   // Posun ukládáme ke skutečně použité verzi textu (po výměně se liší od prop).
   const effectiveId = lyrics?.id ?? lyricsId

@@ -38,5 +38,6 @@ Klíč si v Google Cloud Console omez na doménu aplikace a jen na
 ## Tech stack
 
 React + Vite, Tailwind CSS, YouTube IFrame Player API, YouTube Data API v3,
-Web Audio API, texty písní z [LRCLIB](https://lrclib.net). Čistě statická
-aplikace bez backendu, nasazená na Vercelu.
+Web Audio API. Texty písní: primárně titulky přímo z hraného videa
+(serverless funkce `api/captions.js` — časování sedí na milisekundy
+k danému videu), záložně [LRCLIB](https://lrclib.net). Nasazeno na Vercelu.

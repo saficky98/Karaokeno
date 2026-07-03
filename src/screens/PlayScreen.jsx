@@ -279,12 +279,15 @@ export default function PlayScreen({
       {showLyrics && !ended && playerError === null && (
         <Suspense fallback={null}>
           <LyricsPanel
+            videoId={videoId}
             lyricsId={nowPlaying.lyricsId ?? null}
             playerApiRef={playerApiRef}
             onClose={() => setShowLyrics(false)}
             onResolved={(id) => {
               setLyricsAvailable(Boolean(id))
-              if (id && id !== nowPlaying.lyricsId) onLyricsDiscovered?.(id)
+              // do stavu ukládáme jen LRCLIB id (číslo) — titulky videa
+              // (yt:…) si každé zařízení načte samo podle videoId
+              if (typeof id === 'number' && id !== nowPlaying.lyricsId) onLyricsDiscovered?.(id)
             }}
           />
         </Suspense>
