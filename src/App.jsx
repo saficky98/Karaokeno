@@ -149,6 +149,7 @@ function HostApp() {
         ? {
             title: nowPlaying.title,
             singerId: nowPlaying.singerId,
+            videoId: nowPlaying.videoId ?? null,
             lyricsId: nowPlaying.lyricsId ?? null,
             pos: progressRef.current,
           }
