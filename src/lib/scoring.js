@@ -22,6 +22,11 @@ export class ScoreEngine {
     this.lastCents = null
   }
 
+  setDuration(durationSec) {
+    if (!Number.isFinite(durationSec) || durationSec < 30) return
+    this.duration = Math.max(30, durationSec)
+  }
+
   // frame: { rms, f0 (Hz nebo null), dt (sekundy) }
   update({ rms, f0, dt }) {
     this.totalTime += dt

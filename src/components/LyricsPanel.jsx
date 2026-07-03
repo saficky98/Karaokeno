@@ -28,6 +28,24 @@ function saveOffset(lyricsId, value) {
   }
 }
 
+const SCRIPT_LANGS = {
+  'עבר': ['he', 'iw'],
+  'عرب': ['ar'],
+  'ΑΒΓ': ['el'],
+  '한글': ['ko'],
+}
+
+function preferredCaptionLang(lyrics) {
+  return SCRIPT_LANGS[lyrics?.script]?.[0] ?? ''
+}
+
+function captionsMatchLyrics(caps, lyrics) {
+  const wants = SCRIPT_LANGS[lyrics?.script]
+  if (!wants) return true
+  const lang = (caps?.lang ?? '').toLowerCase()
+  return wants.some((want) => lang.startsWith(want))
+}
+
 // Panel u spodního okraje. Zdroje textu podle přesnosti:
 // 1. TITULKY PŘÍMO Z VIDEA (/api/captions) — časově přesné z principu,
 //    často i s časy jednotlivých slov; žádné párování verzí,
@@ -50,6 +68,7 @@ export default function LyricsPanel({ videoId, lyricsId, playerApiRef, onClose, 
 
     let cancelled = false
     let retimer = null
+    const hasExplicitLyrics = lyricsId != null
     setState('loading')
     setOffset(loadOffset(lyricsId))
 
@@ -61,15 +80,8 @@ export default function LyricsPanel({ videoId, lyricsId, playerApiRef, onClose, 
       onResolved?.(found.id)
     }
 
-    // Pořadí zdrojů podle skutečné kvality pro zpěv:
-    // 1. RUČNÍ titulky videa (člověkem načasované na tohle video),
-    // 2. LRCLIB (synchronizovaný text dělaný pro zpívání) — vybraný/dohledaný,
-    // 3. AUTOMATICKÉ (ASR) titulky až naposled: časy patří videu, ale
-    //    rozpoznávání u zpěvu ZAOSTÁVÁ o sekundy — jen záchrana, když
-    //    nic lepšího není.
-    fetchVideoCaptions(videoId).then((caps) => {
-      if (cancelled) return
-      const captionLyrics = caps
+    function captionLyrics(caps) {
+      return caps
         ? {
             id: `yt:${videoId}`,
             synced: caps.lines,
@@ -77,38 +89,48 @@ export default function LyricsPanel({ videoId, lyricsId, playerApiRef, onClose, 
             duration: 0,
           }
         : null
+    }
 
-      if (captionLyrics && caps.kind === 'manual') {
-        useFound(captionLyrics)
+    function notFound() {
+      if (cancelled) return
+      setState('notfound')
+      onResolved?.(null)
+      retimer = setTimeout(() => setState('hidden'), 6000)
+    }
+
+    // Pořadí zdrojů podle skutečné kvality pro zpěv:
+    // 1. RUČNÍ titulky videa, pokud jazykově sedí na vybraný text,
+    // 2. LRCLIB (vybraný uživatelem nebo dohledaný podle videa),
+    // 3. AUTOMATICKÉ (ASR) titulky až naposled jako záchrana.
+    async function loadLyrics() {
+      const selected = hasExplicitLyrics ? await getLyricsById(lyricsId) : null
+      if (cancelled) return
+
+      const caps = await fetchVideoCaptions(videoId, { lang: preferredCaptionLang(selected) })
+      if (cancelled) return
+      const fromCaptions = captionLyrics(caps)
+
+      if (fromCaptions && caps.kind === 'manual' && (!selected || captionsMatchLyrics(caps, selected))) {
+        useFound(fromCaptions)
         return
       }
 
-      // když LRCLIB nic nedá, použijeme aspoň ASR titulky; jinak cedulka
-      function fallbackToAsr() {
-        if (cancelled) return
-        if (captionLyrics) {
-          useFound(captionLyrics)
-        } else {
-          setState('notfound')
-          onResolved?.(null)
-          retimer = setTimeout(() => setState('hidden'), 6000)
-        }
+      if (selected) {
+        useFound(selected)
+        return
       }
 
-      if (lyricsId != null) {
-        getLyricsById(lyricsId).then((found) => {
-          if (cancelled) return
-          if (!found) {
-            fallbackToAsr()
-            return
-          }
-          useFound(found)
-          scheduleRematch(found)
-        })
-      } else {
-        discover(0, fallbackToAsr)
+      const fallbackToAsr = () => {
+        if (cancelled) return
+        if (fromCaptions) useFound(fromCaptions)
+        else notFound()
       }
-    })
+
+      if (hasExplicitLyrics) fallbackToAsr()
+      else discover(0, fallbackToAsr)
+    }
+
+    loadLyrics()
 
     // Bez lyricsId: počkáme, až přehrávač zná metadata + délku, a text
     // dohledáme. Při neúspěchu předá slovo záloze (ASR titulky / cedulka).
@@ -123,7 +145,10 @@ export default function LyricsPanel({ videoId, lyricsId, playerApiRef, onClose, 
       }
       discoverLyricsForVideo({ title: data.title, author: data.author, duration }).then((found) => {
         if (cancelled) return
-        if (found) useFound(found)
+        if (found) {
+          useFound(found)
+          scheduleRematch(found)
+        }
         else onFail()
       })
     }

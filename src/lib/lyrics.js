@@ -136,6 +136,7 @@ export async function getLyricsById(lyricsId) {
     synced: parseLrc(r.syncedLyrics),
     match: [r.artistName, r.trackName].filter(Boolean).join(' — '),
     duration: r.duration ?? 0,
+    script: dominantScript(r.syncedLyrics),
   }
 }
 
@@ -172,6 +173,7 @@ export async function findLyricsForDuration(artist, track, targetSec, tolerance 
     synced: parseLrc(r.syncedLyrics),
     match: [r.artistName, r.trackName].filter(Boolean).join(' — '),
     duration: r.duration ?? 0,
+    script: dominantScript(r.syncedLyrics),
   }
 }
 
@@ -211,7 +213,7 @@ export async function discoverLyricsForVideo({ title, author, duration }, tolera
   }
   // Názvy typu „Interpret | Píseň“ nebo „Interpret – Píseň • akce“: zkusíme
   // i jednotlivé úseky (samotné a s kanálem) — některý z nich je název písně.
-  const segments = cleanTitle.split(/[|•·]+|\s[–—]\s/).map((s) => s.trim()).filter((s) => s.length >= 3)
+  const segments = cleanTitle.split(/[|•·]+|\s[-–—]\s/).map((s) => s.trim()).filter((s) => s.length >= 3)
   if (segments.length > 1) {
     for (const segment of segments) {
       push(segment)
@@ -221,6 +223,10 @@ export async function discoverLyricsForVideo({ title, author, duration }, tolera
 
   for (const query of attempts.slice(0, 6)) {
     const found = await findLyricsForDuration('', query, duration, tolerance)
+    if (found) return found
+  }
+  for (const query of attempts.slice(0, 6)) {
+    const found = await findLyricsForDuration('', query, duration, 8)
     if (found) return found
   }
   return null

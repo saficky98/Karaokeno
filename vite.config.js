@@ -2,7 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
-// Lokální /api/*: stejné handlery jako serverless funkce, jen obalené pro
+// Lokální /api/*: stejné serverové handlery, jen obalené pro
 // Node server Vite. Titulky i vyhledávání tak fungují i v `npm run dev`
 // a `npm run preview` — bez jakéhokoli hostingu.
 function serverApi() {
@@ -14,7 +14,7 @@ function serverApi() {
     for (const [path, load] of Object.entries(routes)) {
       server.middlewares.use(path, async (req, res) => {
         const { default: handler } = await load()
-        // shim Vercel res API nad node:http odpovědí
+        // minimální res API nad node:http odpovědí
         res.status = (code) => ((res.statusCode = code), res)
         res.json = (data) => {
           res.setHeader('content-type', 'application/json')

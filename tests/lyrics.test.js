@@ -1,5 +1,9 @@
-import { describe, it, expect } from 'vitest'
-import { parseLrc, dominantScript, formatSeconds } from '../src/lib/lyrics.js'
+import { afterEach, describe, it, expect, vi } from 'vitest'
+import { parseLrc, dominantScript, formatSeconds, discoverLyricsForVideo } from '../src/lib/lyrics.js'
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
 
 describe('parseLrc', () => {
   it('parsuje základní LRC řádky a řadí podle času', () => {
@@ -69,5 +73,31 @@ describe('formatSeconds', () => {
   it('formátuje mm:ss', () => {
     expect(formatSeconds(65)).toBe('1:05')
     expect(formatSeconds(212)).toBe('3:32')
+  })
+})
+
+describe('discoverLyricsForVideo', () => {
+  it('zkouší i části názvu oddělené obyčejnou pomlčkou', async () => {
+    const queries = []
+    vi.stubGlobal('fetch', async (url) => {
+      const query = new URL(url).searchParams.get('q')
+      queries.push(query)
+      const match = query === 'Song'
+      return {
+        ok: true,
+        json: async () => match
+          ? [{ id: 7, artistName: 'Artist', trackName: 'Song', duration: 204, syncedLyrics: '[00:01.00]Hello' }]
+          : [],
+      }
+    })
+
+    const found = await discoverLyricsForVideo({
+      title: 'Artist - Song (Official Video)',
+      author: '',
+      duration: 204,
+    })
+
+    expect(found?.id).toBe(7)
+    expect(queries).toContain('Song')
   })
 })

@@ -92,13 +92,18 @@ export default function PlayScreen({
   const engineRef = useRef(null)
   const stopRef = useRef(null)
   const playerApiRef = useRef(null)
+  const durationTimerRef = useRef(null)
 
   const scoringActive = micConsent === 'on' && !micFailed
 
   // Úklid analýzy při odchodu z obrazovky / výměně písničky
   useEffect(() => {
     setLyricsAvailable(null)
-    return () => stopRef.current?.()
+    return () => {
+      clearTimeout(durationTimerRef.current)
+      durationTimerRef.current = null
+      stopRef.current?.()
+    }
   }, [nowPlaying?.videoId])
 
   // Pozice přehrávání pro hosty v místnosti (každých 5 s)
@@ -198,11 +203,45 @@ export default function PlayScreen({
     })
   }
 
+  function playerDuration() {
+    const duration = playerApiRef.current?.getDuration?.() ?? 0
+    return Number.isFinite(duration) && duration >= 30 ? duration : 0
+  }
+
+  function syncScoringDuration(attempt = 0) {
+    clearTimeout(durationTimerRef.current)
+    const duration = playerDuration()
+    if (duration) {
+      engineRef.current?.setDuration(duration)
+      durationTimerRef.current = null
+      return
+    }
+    if (attempt < 24) {
+      durationTimerRef.current = setTimeout(() => syncScoringDuration(attempt + 1), 500)
+    }
+  }
+
   async function startScoring() {
     if (micConsent !== 'on') return
-    const duration = playerApiRef.current?.getDuration?.() || 180
-    engineRef.current = new ScoreEngine(duration)
+    engineRef.current = new ScoreEngine(playerDuration() || 180)
+    syncScoringDuration()
     await runAnalysis()
+  }
+
+  function finishPartialScore() {
+    if (!engineRef.current || (engineRef.current.singTime ?? 0) <= 8) return null
+    const final = engineRef.current.finish()
+    onSongFinished?.({ score: final.score, singerId: singer?.id ?? null, title })
+    return final
+  }
+
+  function resetScoring() {
+    clearTimeout(durationTimerRef.current)
+    durationTimerRef.current = null
+    engineRef.current = null
+    stopRef.current?.()
+    stopRef.current = null
+    setLive(null)
   }
 
   // Přepínač mikrofonu: vypnutí zmrazí skórování (nic se nepočítá),
@@ -231,13 +270,8 @@ export default function PlayScreen({
   // Odchod z písničky: rozzpívané skóre se nezahazuje — když se zpívalo
   // aspoň chvíli, zapíše se do výsledků.
   function handleExit() {
-    if (engineRef.current && (engineRef.current.singTime ?? 0) > 8) {
-      const final = engineRef.current.finish()
-      onSongFinished?.({ score: final.score, singerId: singer?.id ?? null, title })
-    }
-    engineRef.current = null
-    stopRef.current?.()
-    stopRef.current = null
+    finishPartialScore()
+    resetScoring()
     onExit()
   }
 
@@ -258,6 +292,8 @@ export default function PlayScreen({
   function finishSong() {
     stopRef.current?.()
     stopRef.current = null
+    clearTimeout(durationTimerRef.current)
+    durationTimerRef.current = null
     let outcome = null
     if (engineRef.current) {
       const final = engineRef.current.finish()
@@ -271,15 +307,19 @@ export default function PlayScreen({
   }
 
   function goNext() {
+    finishPartialScore()
+    resetScoring()
     setEnded(false)
     setResult(null)
     setLoading(true)
     setPlayerError(null)
     setCounting(true)
     setShowLyrics(true)
+    setLyricsAvailable(null)
     setNeedsUnmute(false)
     setSoundOn(true)
     setMicOn(true)
+    setMicFailed(false)
     onNext()
   }
 
@@ -398,16 +438,18 @@ export default function PlayScreen({
                   <SkipForward size={15} strokeWidth={2} />
                 </button>
               )}
-              <button
-                onClick={toggleSound}
-                aria-label={t(soundOn ? 'sound_toggle_off' : 'sound_toggle_on')}
-                title={t(soundOn ? 'sound_toggle_off' : 'sound_toggle_on')}
-                className={`flex h-9 w-9 items-center justify-center rounded-full border border-line backdrop-blur transition ${
-                  soundOn ? 'bg-black/60 text-white/85 hover:bg-black/80' : 'bg-red-500/25 text-red-200 hover:bg-red-500/35'
-                }`}
-              >
-                {soundOn ? <Volume2 size={15} strokeWidth={2} /> : <VolumeX size={15} strokeWidth={2} />}
-              </button>
+              {!needsUnmute && (
+                <button
+                  onClick={toggleSound}
+                  aria-label={t(soundOn ? 'sound_toggle_off' : 'sound_toggle_on')}
+                  title={t(soundOn ? 'sound_toggle_off' : 'sound_toggle_on')}
+                  className={`flex h-9 w-9 items-center justify-center rounded-full border border-line backdrop-blur transition ${
+                    soundOn ? 'bg-black/60 text-white/85 hover:bg-black/80' : 'bg-red-500/25 text-red-200 hover:bg-red-500/35'
+                  }`}
+                >
+                  {soundOn ? <Volume2 size={15} strokeWidth={2} /> : <VolumeX size={15} strokeWidth={2} />}
+                </button>
+              )}
               <button
                 onClick={handleExit}
                 className="flex items-center gap-1.5 rounded-full border border-line bg-black/60 px-4 py-2 text-sm text-white/85 backdrop-blur transition hover:bg-black/80"

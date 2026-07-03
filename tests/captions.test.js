@@ -50,6 +50,14 @@ describe('pickTrack', () => {
     expect(t.baseUrl).toBe('uk')
   })
 
+  it('vezme automatické titulky v žádaném jazyce před ručními v jiném jazyce', () => {
+    const t = pickTrack(player([
+      { languageCode: 'en', baseUrl: 'manual-en' },
+      { kind: 'asr', languageCode: 'he', baseUrl: 'asr-he' },
+    ]), 'he')
+    expect(t.baseUrl).toBe('asr-he')
+  })
+
   it('vrací null bez stop', () => {
     expect(pickTrack({})).toBeNull()
   })

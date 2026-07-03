@@ -52,4 +52,11 @@ describe('ScoreEngine', () => {
     feed(engine, 300, { rms: 0.2, f0: 220 })
     expect(engine.finish().score).toBeLessThanOrEqual(10000)
   })
+
+  it('umí po startu převzít skutečnou délku písně z přehrávače', () => {
+    const engine = new ScoreEngine(180)
+    engine.setDuration(360)
+    feed(engine, 180, { rms: 0.12, f0: 220 })
+    expect(engine.finish().score).toBeLessThan(6500)
+  })
 })
