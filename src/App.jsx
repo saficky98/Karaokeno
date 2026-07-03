@@ -52,17 +52,33 @@ const initialQueue = saved?.nowPlaying
   ? [{ id: nextId++, ...saved.nowPlaying }, ...(saved.queue ?? [])]
   : (saved?.queue ?? [])
 
+// Má tohle zařízení rozehranou hostitelskou hru? Pak ji nikdy nesmí přebít
+// zapomenutá „guest" místnost — jinak by hráči i fronta zdánlivě zmizeli.
+const hasHostData =
+  savedPlayers.length > 0 ||
+  (saved?.queue?.length ?? 0) > 0 ||
+  (saved?.results?.length ?? 0) > 0 ||
+  Boolean(saved?.room)
+
 export default function App() {
   // Zařízení hosta: otevřelo pozvánku do cizí místnosti → zjednodušená appka.
   const guestRoom = roomFromUrl ?? storedGuestRoom()
-  if (guestRoom && guestRoom.id !== saved?.room?.id) {
-    return (
-      <Suspense fallback={<div className="party-bg h-full" />}>
-        <GuestApp room={guestRoom} />
-      </Suspense>
-    )
+  if (guestRoom) {
+    if (guestRoom.id === saved?.room?.id) {
+      // vlastní pozvánka otevřená na zařízení pořadatele — ignorujeme
+      clearGuestRoom()
+    } else if (roomFromUrl || !hasHostData) {
+      // výslovné kliknutí na pozvánku, nebo čisté zařízení hosta
+      return (
+        <Suspense fallback={<div className="party-bg h-full" />}>
+          <GuestApp room={guestRoom} />
+        </Suspense>
+      )
+    } else {
+      // zastaralá guest místnost na zařízení s rozehranou hrou — pryč s ní
+      clearGuestRoom()
+    }
   }
-  if (guestRoom && guestRoom.id === saved?.room?.id) clearGuestRoom()
 
   return <HostApp />
 }
@@ -96,13 +112,19 @@ function HostApp() {
     let disposed = false
     let api = null
     import('./lib/room.js').then(async ({ connectRoom }) => {
-      api = await connectRoom({
-        roomId: room.id,
-        secret: room.secret,
-        role: 'host',
-        onGuest: applyGuestUpdate,
-        onStatus: setRoomStatus,
-      })
+      try {
+        api = await connectRoom({
+          roomId: room.id,
+          secret: room.secret,
+          role: 'host',
+          onGuest: applyGuestUpdate,
+          onStatus: setRoomStatus,
+        })
+      } catch {
+        // vadný klíč/moduly — místnost nejede, ale appka žije dál
+        if (!disposed) setRoomStatus('offline')
+        return
+      }
       if (disposed) {
         api.end()
         return

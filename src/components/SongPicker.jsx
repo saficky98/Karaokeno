@@ -46,6 +46,7 @@ function SmartSearch({ onPick }) {
   const [query, setQuery] = useState('')
   const [songs, setSongs] = useState(null) // výsledky z LRCLIB (mají text)
   const [videos, setVideos] = useState(null) // záložní karaoke videa (bez textu)
+  const [fallbackNotice, setFallbackNotice] = useState(null) // 'nolyrics' | 'novideo'
   const [loading, setLoading] = useState(false)
   const [resolvingId, setResolvingId] = useState(null) // ke které písničce hledáme audio
   const [error, setError] = useState(null)
@@ -59,6 +60,7 @@ function SmartSearch({ onPick }) {
     setError(null)
     setSongs(null)
     setVideos(null)
+    setFallbackNotice(null)
     setSongError(null)
 
     // 1) písnička se synchronizovaným textem
@@ -72,6 +74,7 @@ function SmartSearch({ onPick }) {
     // 2) nic s textem → záloha: karaoke video z YouTube
     try {
       setVideos(await searchKaraoke(text, { karaoke: true }))
+      setFallbackNotice('nolyrics')
     } catch (err) {
       setError(err?.type ?? 'network')
     } finally {
@@ -86,13 +89,20 @@ function SmartSearch({ onPick }) {
     setResolvingId(song.lyricsId)
     setSongError(null)
     try {
-      const videos = await findVideosForTrack(song.artist, song.track, song.duration)
-      if (videos.length === 0) {
-        setSongError({ id: song.lyricsId, type: 'novideo' })
+      const found = await findVideosForTrack(song.artist, song.track, song.duration)
+      if (found.length === 0) {
+        // nahrávka se sedící délkou není → nabídneme aspoň karaoke videa
+        const karaoke = await searchKaraoke(`${song.artist} ${song.track}`.trim(), { karaoke: true }).catch(() => [])
+        if (karaoke.length > 0) {
+          setVideos(karaoke)
+          setFallbackNotice('novideo')
+        } else {
+          setSongError({ id: song.lyricsId, type: 'novideo' })
+        }
         return
       }
       onPick({
-        videoId: videos[0].videoId,
+        videoId: found[0].videoId,
         title: [song.artist, song.track].filter(Boolean).join(' — '),
         lyricsId: song.lyricsId,
       })
@@ -178,7 +188,9 @@ function SmartSearch({ onPick }) {
       {/* Záloha: karaoke videa (text je ve videu, bez transkripce) */}
       {videos?.length > 0 && (
         <>
-          <p className="rounded-xl bg-white/5 p-2.5 text-center text-xs text-white/50">{t('fallback_karaoke')}</p>
+          <p className="rounded-xl bg-white/5 p-2.5 text-center text-xs text-white/50">
+            {t(fallbackNotice === 'novideo' ? 'fallback_novideo' : 'fallback_karaoke')}
+          </p>
           <ul className="flex flex-col gap-2">
             {videos.map((song) => (
               <li key={song.videoId}>
