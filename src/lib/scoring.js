@@ -13,7 +13,7 @@ export class ScoreEngine {
   constructor(durationSec = 180) {
     this.duration = Math.max(30, durationSec)
     this.score = 0
-    this.noiseFloor = 0.006 // pomalu se učí hluk místnosti
+    this.noiseFloor = 0.02 // adaptivní hladina pozadí (hudba z reproduktorů)
     this.voicedAvg = 0 // průměrná hlasitost zpěvu TOHOTO hráče
     this.voicedFrames = 0
     this.totalTime = 0
@@ -25,12 +25,23 @@ export class ScoreEngine {
   // frame: { rms, f0 (Hz nebo null), dt (sekundy) }
   update({ rms, f0, dt }) {
     this.totalTime += dt
-    const threshold = Math.max(ABSOLUTE_FLOOR, this.noiseFloor * 2.5)
+
+    // Pozadí NENÍ ticho — na párty hraje z reproduktorů samotná písnička.
+    // Hladinu pozadí sledujeme jako pomalé minimum: dolů rychle (nádechy,
+    // mezihry), nahoru podle povahy zvuku — bez zřetelného tónu (hudba)
+    // rychleji, se zřetelným tónem (zpěvák) jen nepatrně, aby práh
+    // nedohnal zpěváka a body nepřestaly přibývat.
+    if (rms < this.noiseFloor) {
+      this.noiseFloor = this.noiseFloor * 0.7 + rms * 0.3
+    } else {
+      const rise = f0 ? 1.0008 : 1.004
+      this.noiseFloor = Math.min(this.noiseFloor * rise + 0.00003, rms)
+    }
+
+    const threshold = Math.max(ABSOLUTE_FLOOR, this.noiseFloor * 1.35)
     const singing = rms > threshold
 
     if (!singing) {
-      // ticho: pomalu dolaďujeme hluk pozadí
-      this.noiseFloor = this.noiseFloor * 0.98 + rms * 0.02
       this.lastCents = null
       return { score: Math.round(this.score), singing: false, level: this.level(rms) }
     }
