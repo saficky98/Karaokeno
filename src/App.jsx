@@ -406,6 +406,9 @@ function HostApp() {
               progressRef.current = sec
               if (room) setProgressTick((x) => x + 1)
             }}
+            onLyricsDiscovered={(id) =>
+              setNowPlaying((prev) => (prev ? { ...prev, lyricsId: id } : prev))
+            }
             leaderboard={leaderboard}
           />
         )}

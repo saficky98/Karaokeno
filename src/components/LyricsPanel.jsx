@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Languages, X } from 'lucide-react'
-import { getLyricsById, findLyricsForDuration } from '../lib/lyrics.js'
+import { getLyricsById, findLyricsForDuration, discoverLyricsForVideo } from '../lib/lyrics.js'
 import SyncedLyrics from './SyncedLyrics.jsx'
 import { useLang } from '../lib/i18n.jsx'
 
@@ -27,27 +27,72 @@ function saveOffset(lyricsId, value) {
   }
 }
 
-// Panel u spodního okraje: přesně ten text, který byl vybrán při přidání
-// písničky (žádné hádání). ± posun řeší případné odchylky nahrávky.
-export default function LyricsPanel({ lyricsId, playerApiRef, onClose }) {
+// Panel u spodního okraje. Dvě cesty k textu:
+// - lyricsId je známé (vybráno při přidání) → načte se přesně ten text
+//   a ověří se, že sedí na délku hrající nahrávky (jinak výměna verze),
+// - lyricsId chybí (písnička z odkazu, karaoke fallback, stará fronta) →
+//   text se DOHLEDÁ z názvu videa, kanálu a přesné délky nahrávky.
+// ± posun řeší zbylé odchylky a pamatuje se k použité verzi textu.
+// onResolved(id|null) hlásí rodiči, jaký text se nakonec používá.
+export default function LyricsPanel({ lyricsId, playerApiRef, onClose, onResolved }) {
   const { t } = useLang()
   const [lyrics, setLyrics] = useState(null)
-  const [state, setState] = useState('loading') // loading | ready | empty
+  const [state, setState] = useState('loading') // loading | ready | empty | hidden
   const [offset, setOffset] = useState(() => loadOffset(lyricsId))
   const offsetRef = useRef(offset)
   offsetRef.current = offset
+  const resolvedRef = useRef(null) // id textu, který už běží (ať se nenačítá dvakrát)
 
   useEffect(() => {
+    if (lyricsId != null && String(lyricsId) === String(resolvedRef.current)) return // už hraje
+
     let cancelled = false
     let retimer = null
     setState('loading')
     setOffset(loadOffset(lyricsId))
-    getLyricsById(lyricsId).then((found) => {
-      if (cancelled) return
+
+    function useFound(found) {
+      resolvedRef.current = found.id
       setLyrics(found)
-      setState(found ? 'ready' : 'empty')
-      if (found) scheduleRematch(found)
-    })
+      setOffset(loadOffset(found.id))
+      setState('ready')
+      onResolved?.(found.id)
+    }
+
+    if (lyricsId != null) {
+      getLyricsById(lyricsId).then((found) => {
+        if (cancelled) return
+        if (!found) {
+          setState('empty')
+          return
+        }
+        useFound(found)
+        scheduleRematch(found)
+      })
+    } else {
+      discover()
+    }
+
+    // Bez lyricsId: počkáme, až přehrávač zná metadata + délku, a text
+    // dohledáme. Když neexistuje, panel zmizí (žádná otravná cedule).
+    function discover(attempt = 0) {
+      const api = playerApiRef.current
+      const duration = api?.getDuration?.() ?? 0
+      const data = api?.getVideoData?.()
+      if (duration < 30 || !data?.title) {
+        if (attempt < 24) retimer = setTimeout(() => discover(attempt + 1), 500)
+        else setState('hidden')
+        return
+      }
+      discoverLyricsForVideo({ title: data.title, author: data.author, duration }).then((found) => {
+        if (cancelled) return
+        if (found) useFound(found)
+        else {
+          setState('hidden')
+          onResolved?.(null)
+        }
+      })
+    }
 
     // PŘESNÉ DOLADĚNÍ: jakmile známe skutečnou délku hrajícího videa,
     // ověříme, že text je načasovaný na tuhle nahrávku. Když délka nesedí
@@ -63,8 +108,7 @@ export default function LyricsPanel({ lyricsId, playerApiRef, onClose }) {
       if (Math.abs(duration - found.duration) <= 1.5) return // text sedí na nahrávku
       findLyricsForDuration(found.artist, found.track, duration).then((better) => {
         if (cancelled || !better || better.id === found.id) return
-        setLyrics(better)
-        setOffset(loadOffset(better.id))
+        useFound(better)
       })
     }
 
@@ -91,6 +135,8 @@ export default function LyricsPanel({ lyricsId, playerApiRef, onClose }) {
   )
 
   const offsetLabel = `${offset > 0 ? '+' : ''}${offset % 1 === 0 ? offset : offset.toFixed(1)}с`
+
+  if (state === 'hidden') return null // text neexistuje — bez panelu i cedule
 
   return (
     <div className="absolute inset-x-0 bottom-0 max-h-[52%] overflow-hidden rounded-t-2xl border-t border-line bg-black/80 backdrop-blur-md">

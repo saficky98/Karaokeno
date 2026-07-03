@@ -71,6 +71,7 @@ export default function PlayScreen({
   onGoHome,
   onSongFinished,
   onProgress,
+  onLyricsDiscovered,
   leaderboard,
 }) {
   const { t } = useLang()
@@ -83,6 +84,8 @@ export default function PlayScreen({
   const [needsUnmute, setNeedsUnmute] = useState(false)
   const [counting, setCounting] = useState(true)
   const [showLyrics, setShowLyrics] = useState(true)
+  // null = ještě nevíme, true = text běží, false = neexistuje (schovat tlačítko)
+  const [lyricsAvailable, setLyricsAvailable] = useState(null)
 
   const engineRef = useRef(null)
   const stopRef = useRef(null)
@@ -92,6 +95,7 @@ export default function PlayScreen({
 
   // Úklid analýzy při odchodu z obrazovky / výměně písničky
   useEffect(() => {
+    setLyricsAvailable(null)
     return () => stopRef.current?.()
   }, [nowPlaying?.videoId])
 
@@ -272,13 +276,21 @@ export default function PlayScreen({
         </button>
       )}
 
-      {showLyrics && !ended && playerError === null && nowPlaying.lyricsId && (
+      {showLyrics && !ended && playerError === null && (
         <Suspense fallback={null}>
-          <LyricsPanel lyricsId={nowPlaying.lyricsId} playerApiRef={playerApiRef} onClose={() => setShowLyrics(false)} />
+          <LyricsPanel
+            lyricsId={nowPlaying.lyricsId ?? null}
+            playerApiRef={playerApiRef}
+            onClose={() => setShowLyrics(false)}
+            onResolved={(id) => {
+              setLyricsAvailable(Boolean(id))
+              if (id && id !== nowPlaying.lyricsId) onLyricsDiscovered?.(id)
+            }}
+          />
         </Suspense>
       )}
 
-      {!ended && playerError === null && !counting && !showLyrics && nowPlaying.lyricsId && (
+      {!ended && playerError === null && !counting && !showLyrics && lyricsAvailable !== false && (
         <button
           onClick={() => setShowLyrics(true)}
           className="absolute right-3 bottom-3 flex items-center gap-1.5 rounded-full border border-line bg-black/60 px-4 py-2 text-sm text-white/85 backdrop-blur transition hover:bg-black/80"
