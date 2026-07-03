@@ -95,6 +95,8 @@ export function parseJson3(data) {
     }
     lines.push({
       t: (ev.tStartMs ?? 0) / 1000,
+      // skutečná doba zobrazení titulku ≈ jak dlouho se řádek zpívá
+      d: ev.dDurationMs > 0 ? ev.dDurationMs / 1000 : null,
       text: bare,
       words: words.length > 1 ? words : null,
     })
