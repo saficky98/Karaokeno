@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Languages, X } from 'lucide-react'
+import { Languages, Target, X } from 'lucide-react'
 import { getLyricsById, findLyricsForDuration, discoverLyricsForVideo } from '../lib/lyrics.js'
 import { fetchVideoCaptions } from '../lib/captions.js'
 import SyncedLyrics from './SyncedLyrics.jsx'
@@ -61,54 +61,70 @@ export default function LyricsPanel({ videoId, lyricsId, playerApiRef, onClose, 
       onResolved?.(found.id)
     }
 
-    // 1) titulky přímo z videa — když existují, není co řešit
+    // Pořadí zdrojů podle skutečné kvality pro zpěv:
+    // 1. RUČNÍ titulky videa (člověkem načasované na tohle video),
+    // 2. LRCLIB (synchronizovaný text dělaný pro zpívání) — vybraný/dohledaný,
+    // 3. AUTOMATICKÉ (ASR) titulky až naposled: časy patří videu, ale
+    //    rozpoznávání u zpěvu ZAOSTÁVÁ o sekundy — jen záchrana, když
+    //    nic lepšího není.
     fetchVideoCaptions(videoId).then((caps) => {
       if (cancelled) return
-      if (caps) {
-        useFound({
-          id: `yt:${videoId}`,
-          synced: caps.lines,
-          match: `${t('lyrics_from_video')}${caps.lang ? ` · ${caps.lang}` : ''}`,
-          duration: 0,
-        })
+      const captionLyrics = caps
+        ? {
+            id: `yt:${videoId}`,
+            synced: caps.lines,
+            match: `${t('lyrics_from_video')}${caps.lang ? ` · ${caps.lang}` : ''}`,
+            duration: 0,
+          }
+        : null
+
+      if (captionLyrics && caps.kind === 'manual') {
+        useFound(captionLyrics)
         return
       }
-      // 2) + 3) LRCLIB cesty
+
+      // když LRCLIB nic nedá, použijeme aspoň ASR titulky; jinak cedulka
+      function fallbackToAsr() {
+        if (cancelled) return
+        if (captionLyrics) {
+          useFound(captionLyrics)
+        } else {
+          setState('notfound')
+          onResolved?.(null)
+          retimer = setTimeout(() => setState('hidden'), 6000)
+        }
+      }
+
       if (lyricsId != null) {
         getLyricsById(lyricsId).then((found) => {
           if (cancelled) return
           if (!found) {
-            setState('empty')
+            fallbackToAsr()
             return
           }
           useFound(found)
           scheduleRematch(found)
         })
       } else {
-        discover()
+        discover(0, fallbackToAsr)
       }
     })
 
     // Bez lyricsId: počkáme, až přehrávač zná metadata + délku, a text
-    // dohledáme. Když neexistuje, panel zmizí (žádná otravná cedule).
-    function discover(attempt = 0) {
+    // dohledáme. Při neúspěchu předá slovo záloze (ASR titulky / cedulka).
+    function discover(attempt, onFail) {
       const api = playerApiRef.current
       const duration = api?.getDuration?.() ?? 0
       const data = api?.getVideoData?.()
       if (duration < 30 || !data?.title) {
-        if (attempt < 24) retimer = setTimeout(() => discover(attempt + 1), 500)
-        else setState('hidden')
+        if (attempt < 24) retimer = setTimeout(() => discover(attempt + 1, onFail), 500)
+        else onFail()
         return
       }
       discoverLyricsForVideo({ title: data.title, author: data.author, duration }).then((found) => {
         if (cancelled) return
         if (found) useFound(found)
-        else {
-          // krátce řekneme, že text neexistuje, a pak zmizíme — žádné mlčení
-          setState('notfound')
-          onResolved?.(null)
-          retimer = setTimeout(() => setState('hidden'), 6000)
-        }
+        else onFail()
       })
     }
 
@@ -147,6 +163,24 @@ export default function LyricsPanel({ videoId, lyricsId, playerApiRef, onClose, 
     })
   }
 
+  // „В такт": klepni přesně ve chvíli, kdy začne zobrazený řádek — spočítá
+  // se posun, který ho ukotví na teď, a celý text se srovná (a zapamatuje).
+  function syncNow() {
+    const lines = lyrics?.synced
+    const raw = playerApiRef.current?.getCurrentTime?.() ?? 0
+    if (!lines?.length) return
+    const effective = raw + offsetRef.current
+    let index = -1
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].t <= effective) index = i
+      else break
+    }
+    const line = lines[Math.max(index, 0)]
+    const value = Math.round((line.t - raw) * 10) / 10
+    setOffset(value)
+    saveOffset(effectiveId, value)
+  }
+
   const getTime = useCallback(
     () => (playerApiRef.current?.getCurrentTime?.() ?? 0) + offsetRef.current,
     [playerApiRef],
@@ -176,6 +210,13 @@ export default function LyricsPanel({ videoId, lyricsId, playerApiRef, onClose, 
         </span>
         {lyrics?.synced && (
           <>
+            <button
+              onClick={syncNow}
+              title={t('sync_now_hint')}
+              className="flex items-center gap-1 rounded-md bg-neon-cyan/15 px-2 py-0.5 text-neon-cyan hover:bg-neon-cyan/25"
+            >
+              <Target size={12} strokeWidth={2} /> {t('sync_now')}
+            </button>
             <button onClick={() => nudge(-0.5)} className="rounded-md bg-white/10 px-2 py-0.5 tabular-nums hover:bg-white/20">−0,5с</button>
             <button
               onClick={() => { setOffset(0); saveOffset(effectiveId, 0) }}

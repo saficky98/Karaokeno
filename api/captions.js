@@ -94,6 +94,7 @@ export function parseJson3(data) {
   const lines = []
   for (const ev of data?.events ?? []) {
     if (!Array.isArray(ev.segs)) continue
+    if (ev.aAppend === 1) continue // „rolující" pokračování předchozího řádku
     const text = ev.segs
       .map((s) => s.utf8 ?? '')
       .join('')
@@ -119,7 +120,8 @@ export function parseJson3(data) {
     })
   }
   lines.sort((a, b) => a.t - b.t)
-  return lines
+  // duplicitní po sobě jdoucí řádky (rolující ASR) — necháme jen první výskyt
+  return lines.filter((line, i) => i === 0 || line.text !== lines[i - 1].text)
 }
 
 export default async function handler(req, res) {

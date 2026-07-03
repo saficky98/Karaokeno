@@ -137,9 +137,17 @@ export async function findLyricsForDuration(artist, track, targetSec, tolerance 
   const results = await lrclibJson(`https://lrclib.net/api/search?q=${encodeURIComponent(query)}`)
   if (!Array.isArray(results)) return null
 
+  // Pojistka proti záměně: kandidát musí sdílet aspoň jedno slovo (3+ znaky)
+  // s dotazem — shoda délky sama o sobě umí spárovat úplně cizí písničku.
+  const tokens = query.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((w) => w.length >= 3)
+
   let best = null
   for (const r of results) {
     if (!r.syncedLyrics || !r.duration) continue
+    if (tokens.length > 0) {
+      const hay = `${r.artistName ?? ''} ${r.trackName ?? ''}`.toLowerCase()
+      if (!tokens.some((tok) => hay.includes(tok))) continue
+    }
     const diff = Math.abs(r.duration - targetSec)
     if (diff <= tolerance && (!best || diff < best.diff)) best = { r, diff }
   }
