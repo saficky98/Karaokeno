@@ -114,6 +114,7 @@ const STR = {
 
     lyrics_title: 'Текст пісні',
     lyrics_from_video: 'Текст із цього відео',
+    lyrics_notfound: 'Синхронний текст до цієї пісні ніде не знайшовся',
     mic_toggle_off: 'Вимкнути мікрофон',
     mic_toggle_on: 'Увімкнути мікрофон',
     sound_toggle_off: 'Вимкнути звук',
@@ -272,6 +273,7 @@ const STR = {
 
     lyrics_title: 'Text písničky',
     lyrics_from_video: 'Text z tohoto videa',
+    lyrics_notfound: 'Synchronizovaný text k téhle písničce se nikde nenašel',
     mic_toggle_off: 'Vypnout mikrofon',
     mic_toggle_on: 'Zapnout mikrofon',
     sound_toggle_off: 'Vypnout zvuk',

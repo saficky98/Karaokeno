@@ -180,12 +180,26 @@ export async function discoverLyricsForVideo({ title, author, duration }, tolera
     .trim()
 
   const attempts = []
-  if (cleanTitle) attempts.push(cleanTitle)
-  if (cleanAuthor && cleanTitle && !cleanTitle.toLowerCase().includes(cleanAuthor.toLowerCase())) {
-    attempts.push(`${cleanAuthor} ${cleanTitle}`)
+  const push = (q) => {
+    const query = q.replace(/\s+/g, ' ').trim()
+    if (query.length >= 3 && !attempts.includes(query)) attempts.push(query)
   }
 
-  for (const query of attempts) {
+  push(cleanTitle)
+  if (cleanAuthor && !cleanTitle.toLowerCase().includes(cleanAuthor.toLowerCase())) {
+    push(`${cleanAuthor} ${cleanTitle}`)
+  }
+  // Názvy typu „Interpret | Píseň“ nebo „Interpret – Píseň • akce“: zkusíme
+  // i jednotlivé úseky (samotné a s kanálem) — některý z nich je název písně.
+  const segments = cleanTitle.split(/[|•·]+|\s[–—]\s/).map((s) => s.trim()).filter((s) => s.length >= 3)
+  if (segments.length > 1) {
+    for (const segment of segments) {
+      push(segment)
+      if (cleanAuthor) push(`${cleanAuthor} ${segment}`)
+    }
+  }
+
+  for (const query of attempts.slice(0, 6)) {
     const found = await findLyricsForDuration('', query, duration, tolerance)
     if (found) return found
   }
