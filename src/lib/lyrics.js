@@ -155,6 +155,43 @@ export async function findLyricsForDuration(artist, track, targetSec, tolerance 
   }
 }
 
+// ---------- dohledání textu k libovolnému videu ----------
+// Písničky přidané odkazem nebo karaoke vyhledáváním nemají lyricsId.
+// Při přehrávání ale známe název videa, kanál a PŘESNOU délku — z toho
+// jde text dohledat spolehlivě: dotaz z očištěného názvu + shoda délky.
+
+// Očistí název YouTube videa od závorek a technických dovětků.
+function cleanVideoTitle(raw) {
+  return (raw || '')
+    .replace(/[([{][^)\]}]*[)\]}]/g, ' ') // (Official Video), [4K]…
+    .replace(/\b(official\s+(music\s+)?video|official\s+audio|lyric\s+video|lyrics|video\s*clip|videoclip|full\s+hd|karaoke|instrumental|sing[\s-]?along)\b/gi, ' ')
+    .replace(/официальн\S*|офіційн\S*|караоке|мінус|минусовк\S*/gi, ' ')
+    .replace(/["“”«»]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+export async function discoverLyricsForVideo({ title, author, duration }, tolerance = 2.5) {
+  if (!duration) return null
+  const cleanTitle = cleanVideoTitle(title)
+  const cleanAuthor = (author || '')
+    .replace(/\s*-\s*Topic\s*$/i, '')
+    .replace(/VEVO\s*$/i, '')
+    .trim()
+
+  const attempts = []
+  if (cleanTitle) attempts.push(cleanTitle)
+  if (cleanAuthor && cleanTitle && !cleanTitle.toLowerCase().includes(cleanAuthor.toLowerCase())) {
+    attempts.push(`${cleanAuthor} ${cleanTitle}`)
+  }
+
+  for (const query of attempts) {
+    const found = await findLyricsForDuration('', query, duration, tolerance)
+    if (found) return found
+  }
+  return null
+}
+
 export function formatSeconds(sec) {
   const m = Math.floor(sec / 60)
   const s = Math.round(sec % 60)
