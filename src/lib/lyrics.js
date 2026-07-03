@@ -35,8 +35,13 @@ export function dominantScript(text) {
 
 // "[mm:ss.xx] řádek" -> [{t, text, words?}]
 // Podporuje i rozšířené LRC se slovy: "[00:12.00] <00:12.00> Slovo <00:12.50> dál"
+// a korekční tag "[offset:±ms]" (kladný posouvá text DŘÍV — dle LRC konvence).
 export function parseLrc(lrc) {
   const lines = []
+  let offsetSec = 0
+  const offsetMatch = (lrc || '').match(/\[offset:\s*([+-]?\d+)\s*\]/i)
+  if (offsetMatch) offsetSec = parseInt(offsetMatch[1], 10) / 1000
+
   for (const raw of (lrc || '').split('\n')) {
     const match = raw.match(/^\s*\[(\d+):(\d+(?:\.\d+)?)\](.*)$/)
     if (!match) continue
@@ -59,6 +64,13 @@ export function parseLrc(lrc) {
     }
 
     if (rest) lines.push({ t, text: rest, words })
+  }
+
+  if (offsetSec !== 0) {
+    for (const line of lines) {
+      line.t = Math.max(0, line.t - offsetSec)
+      if (line.words) for (const w of line.words) w.t = Math.max(0, w.t - offsetSec)
+    }
   }
   return lines.sort((a, b) => a.t - b.t)
 }
@@ -106,6 +118,37 @@ export async function getLyricsById(lyricsId) {
   const r = await lrclibJson(`https://lrclib.net/api/get/${lyricsId}`)
   if (!r?.syncedLyrics) return null
   return {
+    id: r.id ?? lyricsId,
+    artist: r.artistName ?? '',
+    track: r.trackName ?? '',
+    synced: parseLrc(r.syncedLyrics),
+    match: [r.artistName, r.trackName].filter(Boolean).join(' — '),
+    duration: r.duration ?? 0,
+  }
+}
+
+// PŘESNÉ PÁROVÁNÍ PŘI PŘEHRÁVÁNÍ: až hraje video, známe jeho délku na
+// sekundu. Táž píseň má v LRCLIB často víc verzí (single/album/remaster)
+// s různým nástupem — vybereme text načasovaný přesně na hrající nahrávku.
+// Vrací stejný tvar jako getLyricsById, nebo null když nic nesedí líp.
+export async function findLyricsForDuration(artist, track, targetSec, tolerance = 1.5) {
+  const query = `${artist} ${track}`.trim()
+  if (!query || !targetSec) return null
+  const results = await lrclibJson(`https://lrclib.net/api/search?q=${encodeURIComponent(query)}`)
+  if (!Array.isArray(results)) return null
+
+  let best = null
+  for (const r of results) {
+    if (!r.syncedLyrics || !r.duration) continue
+    const diff = Math.abs(r.duration - targetSec)
+    if (diff <= tolerance && (!best || diff < best.diff)) best = { r, diff }
+  }
+  if (!best) return null
+  const r = best.r
+  return {
+    id: r.id,
+    artist: r.artistName ?? '',
+    track: r.trackName ?? '',
     synced: parseLrc(r.syncedLyrics),
     match: [r.artistName, r.trackName].filter(Boolean).join(' — '),
     duration: r.duration ?? 0,

@@ -35,12 +35,20 @@ function useSmoothTime(getTime) {
           lastMovePerf = perf
         }
         const predicted = baseVideo + (perf - basePerf) / 1000
+        const drift = real - predicted
         if ((perf - lastMovePerf) / 1000 > 0.6) {
           playing = false // pauza/buffering: stojíme na skutečném čase
           baseVideo = real
           basePerf = perf
-        } else if (Math.abs(real - predicted) > 0.5) {
-          playing = true // přetočení / rozjezd po pauze: srovnat se
+        } else if (drift > 0.04) {
+          // Vzorek z přehrávače je vždy „stará pravda" (hlásí se se zpožděním).
+          // Když je PŘED predikcí, jsme prokazatelně pozadu → dorovnat hned.
+          // Tím zmizí systematické zpoždění textu z ukotvení na starý vzorek.
+          playing = true
+          baseVideo = real
+          basePerf = perf
+        } else if (drift < -0.45) {
+          playing = true // přetočení zpět / zpomalení bufferingem: srovnat se
           baseVideo = real
           basePerf = perf
         } else {
