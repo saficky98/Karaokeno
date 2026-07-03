@@ -1,4 +1,4 @@
-// Vercel serverless funkce: /api/captions?v=VIDEO_ID[&lang=xx]
+// Serverová cesta: /api/captions?v=VIDEO_ID[&lang=xx]
 //
 // Vytáhne titulky přímo z daného YouTube videa — včetně automaticky
 // generovaných (ASR), které mají časy JEDNOTLIVÝCH SLOV. Časování je tedy
@@ -76,11 +76,18 @@ async function playerViaWatchPage(videoId) {
 
 // Výběr stopy: ručně dělané titulky před automatickými; volitelně
 // preferovaný jazyk (?lang=…).
+function langMatches(code = '', wantLang = '') {
+  if (!wantLang) return false
+  const lang = code.toLowerCase()
+  const want = wantLang.toLowerCase()
+  return lang.startsWith(want) || (want === 'he' && lang.startsWith('iw'))
+}
+
 export function pickTrack(player, wantLang = '') {
   const tracks = player?.captions?.playerCaptionsTracklistRenderer?.captionTracks
   if (!Array.isArray(tracks) || tracks.length === 0) return null
   const score = (t) =>
-    (t.kind === 'asr' ? 0 : 10) + (wantLang && (t.languageCode || '').startsWith(wantLang) ? 5 : 0)
+    (t.kind === 'asr' ? 0 : 10) + (wantLang && langMatches(t.languageCode, wantLang) ? 50 : 0)
   return [...tracks].sort((a, b) => score(b) - score(a))[0]
 }
 

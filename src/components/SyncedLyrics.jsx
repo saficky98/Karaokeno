@@ -112,6 +112,13 @@ const SIZES = {
   },
 }
 
+function TranslitLine({ text, className }) {
+  if (!needsTransliteration(text)) return null
+  const translit = romanize(text)
+  if (!translit || translit === text) return null
+  return <p className={`${className} leading-snug`}>{translit}</p>
+}
+
 export default function SyncedLyrics({ lines, getTime, size = 'lg' }) {
   const now = useSmoothTime(getTime)
   const S = SIZES[size] ?? SIZES.lg
@@ -145,14 +152,10 @@ export default function SyncedLyrics({ lines, getTime, size = 'lg' }) {
       {inBreak && <BreakBar from={current ? currentEnd : 0} to={next.t} now={now} />}
 
       <p className={`${S.big} ${S.minH} text-white/95`}>{bigLine ? bigLine.text : ' '}</p>
-      {bigLine && needsTransliteration(bigLine.text) && (
-        <p className={`${S.translit} leading-snug`}>{romanize(bigLine.text)}</p>
-      )}
+      {bigLine && <TranslitLine text={bigLine.text} className={S.translit} />}
 
       {smallLine && <p className={`${S.small} leading-snug`}>{smallLine.text}</p>}
-      {smallLine && needsTransliteration(smallLine.text) && (
-        <p className={`${S.translitSmall} leading-snug`}>{romanize(smallLine.text)}</p>
-      )}
+      {smallLine && <TranslitLine text={smallLine.text} className={S.translitSmall} />}
     </div>
   )
 }

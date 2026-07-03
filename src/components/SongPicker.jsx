@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { KeyRound, Link2, Loader2, Music2, Plus, Search } from 'lucide-react'
-import { searchKaraoke, findVideosForTrack, getApiKey, setApiKey } from '../lib/youtubeApi.js'
+import { searchKaraoke, findVideosForTrack, setApiKey } from '../lib/youtubeApi.js'
 import { searchSongs, formatSeconds } from '../lib/lyrics.js'
 import { parseYouTubeId } from '../lib/youtube.js'
 import { useLang } from '../lib/i18n.jsx'
@@ -13,35 +13,31 @@ import { useLang } from '../lib/i18n.jsx'
 //    video z YouTube (text je vypálený ve videu, bez transkripce).
 export default function SongPicker({ onPick, compact = false }) {
   const { t } = useLang()
-  const [hasKey, setHasKey] = useState(Boolean(getApiKey()))
+  // Vyhledávání funguje i bez klíče (serverová funkce /api/search + LRCLIB).
+  // Klíč nabídneme, teprve když obě bezklíčové cesty selžou ('nokey').
+  const [needsKey, setNeedsKey] = useState(false)
 
-  if (!hasKey) {
-    return (
-      <div className="flex flex-col gap-3">
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-xs text-white/35">{t('search_sub_smart')}</p>
+      {needsKey && (
         <div className="card p-4 text-sm text-white/65">
           <p className="flex items-center gap-2">
             <KeyRound size={15} strokeWidth={1.8} className="shrink-0 text-white/40" />
             {t('no_key_title')}
           </p>
           <p className="mt-1.5">{t('no_key_hint')}</p>
-          <KeyInput onSaved={() => setHasKey(true)} />
+          <KeyInput onSaved={() => setNeedsKey(false)} />
         </div>
-        <LinkFallback onPick={onPick} alwaysOpen={compact} />
-      </div>
-    )
-  }
-
-  return (
-    <div className="flex flex-col gap-3">
-      <p className="text-xs text-white/35">{t('search_sub_smart')}</p>
-      <SmartSearch onPick={onPick} />
-      <LinkFallback onPick={onPick} />
+      )}
+      <SmartSearch onPick={onPick} onNeedsKey={() => setNeedsKey(true)} />
+      <LinkFallback onPick={onPick} alwaysOpen={compact} />
     </div>
   )
 }
 
 // Chytré hledání: písnička se synchronizovaným textem, jinak karaoke video.
-function SmartSearch({ onPick }) {
+function SmartSearch({ onPick, onNeedsKey }) {
   const { t } = useLang()
   const [query, setQuery] = useState('')
   const [songs, setSongs] = useState(null) // výsledky z LRCLIB (mají text)
@@ -77,6 +73,7 @@ function SmartSearch({ onPick }) {
       setFallbackNotice('nolyrics')
     } catch (err) {
       setError(err?.type ?? 'network')
+      if (err?.type === 'nokey' || err?.type === 'key') onNeedsKey?.()
     } finally {
       setLoading(false)
     }
@@ -108,6 +105,7 @@ function SmartSearch({ onPick }) {
       })
     } catch (err) {
       setSongError({ id: song.lyricsId, type: err?.type ?? 'network' })
+      if (err?.type === 'nokey' || err?.type === 'key') onNeedsKey?.()
     } finally {
       setResolvingId(null)
     }
@@ -134,7 +132,7 @@ function SmartSearch({ onPick }) {
       </form>
 
       {loading && <p className="animate-pulse text-center text-sm text-white/55">{t('searching')}</p>}
-      {error && (
+      {error && error !== 'nokey' && (
         <p className="rounded-xl bg-red-500/10 p-3 text-sm text-red-300">
           {t(error === 'quota' ? 'err_quota' : error === 'key' ? 'err_key' : 'err_network')}
         </p>
@@ -177,7 +175,7 @@ function SmartSearch({ onPick }) {
                 <p className="mt-1 rounded-lg bg-red-500/10 p-2 text-center text-xs text-red-300">
                   {songError.type === 'novideo'
                     ? t('no_video_match')
-                    : t(songError.type === 'quota' ? 'err_quota' : songError.type === 'key' ? 'err_key' : 'err_network')}
+                    : t(songError.type === 'quota' ? 'err_quota' : songError.type === 'key' || songError.type === 'nokey' ? 'err_key' : 'err_network')}
                 </p>
               )}
             </li>

@@ -43,10 +43,18 @@ export function parseLrc(lrc) {
   if (offsetMatch) offsetSec = parseInt(offsetMatch[1], 10) / 1000
 
   for (const raw of (lrc || '').split('\n')) {
-    const match = raw.match(/^\s*\[(\d+):(\d+(?:\.\d+)?)\](.*)$/)
-    if (!match) continue
-    const t = parseInt(match[1], 10) * 60 + parseFloat(match[2])
-    let rest = match[3].trim()
+    // komprimované LRC: jeden řádek textu s VÍCE časy „[01:10.00][02:30.00]text"
+    // (refrény) — posbíráme všechny značky ze začátku řádku
+    const stampRegex = /^\s*\[(\d+):(\d+(?:\.\d+)?)\]/
+    const times = []
+    let restRaw = raw
+    let match
+    while ((match = restRaw.match(stampRegex))) {
+      times.push(parseInt(match[1], 10) * 60 + parseFloat(match[2]))
+      restRaw = restRaw.slice(match[0].length)
+    }
+    if (times.length === 0) continue
+    let rest = restRaw.trim()
     if (!rest) continue
 
     let words = null
@@ -63,7 +71,11 @@ export function parseLrc(lrc) {
       if (words.length === 0) words = null
     }
 
-    if (rest) lines.push({ t, text: rest, words })
+    if (!rest) continue
+    for (const t of times) {
+      // kopie slov pro každý výskyt — korekce offsetu se nesmí sečíst
+      lines.push({ t, text: rest, words: words ? words.map((w) => ({ ...w })) : null })
+    }
   }
 
   if (offsetSec !== 0) {
@@ -124,6 +136,7 @@ export async function getLyricsById(lyricsId) {
     synced: parseLrc(r.syncedLyrics),
     match: [r.artistName, r.trackName].filter(Boolean).join(' — '),
     duration: r.duration ?? 0,
+    script: dominantScript(r.syncedLyrics),
   }
 }
 
@@ -160,6 +173,7 @@ export async function findLyricsForDuration(artist, track, targetSec, tolerance 
     synced: parseLrc(r.syncedLyrics),
     match: [r.artistName, r.trackName].filter(Boolean).join(' — '),
     duration: r.duration ?? 0,
+    script: dominantScript(r.syncedLyrics),
   }
 }
 
@@ -199,7 +213,7 @@ export async function discoverLyricsForVideo({ title, author, duration }, tolera
   }
   // Názvy typu „Interpret | Píseň“ nebo „Interpret – Píseň • akce“: zkusíme
   // i jednotlivé úseky (samotné a s kanálem) — některý z nich je název písně.
-  const segments = cleanTitle.split(/[|•·]+|\s[–—]\s/).map((s) => s.trim()).filter((s) => s.length >= 3)
+  const segments = cleanTitle.split(/[|•·]+|\s[-–—]\s/).map((s) => s.trim()).filter((s) => s.length >= 3)
   if (segments.length > 1) {
     for (const segment of segments) {
       push(segment)
@@ -209,6 +223,10 @@ export async function discoverLyricsForVideo({ title, author, duration }, tolera
 
   for (const query of attempts.slice(0, 6)) {
     const found = await findLyricsForDuration('', query, duration, tolerance)
+    if (found) return found
+  }
+  for (const query of attempts.slice(0, 6)) {
+    const found = await findLyricsForDuration('', query, duration, 8)
     if (found) return found
   }
   return null
