@@ -193,7 +193,7 @@ function cleanVideoTitle(raw) {
     .trim()
 }
 
-export async function discoverLyricsForVideo({ title, author, duration }, tolerance = 2.5) {
+export async function discoverLyricsForVideo({ title, author, duration }, tolerance = 2.5, allowLoose = true) {
   if (!duration) return null
   const cleanTitle = cleanVideoTitle(title)
   const cleanAuthor = (author || '')
@@ -225,6 +225,7 @@ export async function discoverLyricsForVideo({ title, author, duration }, tolera
     const found = await findLyricsForDuration('', query, duration, tolerance)
     if (found) return found
   }
+  if (!allowLoose) return null
   for (const query of attempts.slice(0, 6)) {
     const found = await findLyricsForDuration('', query, duration, 8)
     if (found) return found

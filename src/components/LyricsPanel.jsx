@@ -117,6 +117,11 @@ export default function LyricsPanel({ videoId, lyricsId, playerApiRef, onClose, 
 
       if (selected) {
         useFound(selected)
+        // Video k vybranému textu se hledalo podle délky s tolerancí až
+        // 8 s (findVideosForTrack) — bez rematche by karaoke text mohl
+        // zůstat systematicky posunutý o víc sekund, i když LRCLIB má
+        // verzi sedící na hrající nahrávku přesněji.
+        scheduleRematch(selected)
         return
       }
 
@@ -127,23 +132,27 @@ export default function LyricsPanel({ videoId, lyricsId, playerApiRef, onClose, 
       }
 
       if (hasExplicitLyrics) fallbackToAsr()
-      else discover(0, fallbackToAsr)
+      else discover(0, fallbackToAsr, Boolean(fromCaptions))
     }
 
     loadLyrics()
 
     // Bez lyricsId: počkáme, až přehrávač zná metadata + délku, a text
     // dohledáme. Při neúspěchu předá slovo záloze (ASR titulky / cedulka).
-    function discover(attempt, onFail) {
+    // hasAsrFallback: máme-li už po ruce ASR titulky přesně časované na
+    // TOHLE video, radši je než LRCLIB nalezený jen volnou shodou délky
+    // (až 8 s) — ta by mohla ukázat text z jiné, hůř sedící verze nahrávky.
+    // Volné dohledání tak necháme jen pro případ, kdy žádná záchrana není.
+    function discover(attempt, onFail, hasAsrFallback) {
       const api = playerApiRef.current
       const duration = api?.getDuration?.() ?? 0
       const data = api?.getVideoData?.()
       if (duration < 30 || !data?.title) {
-        if (attempt < 24) retimer = setTimeout(() => discover(attempt + 1, onFail), 500)
+        if (attempt < 24) retimer = setTimeout(() => discover(attempt + 1, onFail, hasAsrFallback), 500)
         else onFail()
         return
       }
-      discoverLyricsForVideo({ title: data.title, author: data.author, duration }).then((found) => {
+      discoverLyricsForVideo({ title: data.title, author: data.author, duration }, 2.5, !hasAsrFallback).then((found) => {
         if (cancelled) return
         if (found) {
           useFound(found)
