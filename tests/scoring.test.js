@@ -11,6 +11,14 @@ function feed(engine, seconds, { rms, f0 = null }) {
   return state
 }
 
+function feedPattern(engine, seconds, frameForTime) {
+  let state
+  for (let t = 0; t < seconds; t += FRAME) {
+    state = engine.update({ ...frameForTime(t), dt: FRAME })
+  }
+  return state
+}
+
 describe('ScoreEngine', () => {
   it('ticho nedává žádné body', () => {
     const engine = new ScoreEngine(180)
@@ -26,6 +34,49 @@ describe('ScoreEngine', () => {
     expect(state.singing).toBe(true)
     expect(state.score).toBeGreaterThan(1000)
     expect(engine.finish().score).toBeLessThanOrEqual(10000)
+  })
+
+  it('samotná hudba z reproduktoru bez hlasu body nesbírá', () => {
+    const engine = new ScoreEngine(180)
+    const state = feed(engine, 20, { rms: 0.02 })
+    expect(state.singing).toBe(false)
+    expect(engine.finish().score).toBe(0)
+  })
+
+  it('ani stabilní tón z podkladu bez zesílení hlasem neboduje', () => {
+    const engine = new ScoreEngine(180)
+    const state = feed(engine, 20, { rms: 0.02, f0: 220 })
+    expect(state.singing).toBe(false)
+    expect(engine.finish().score).toBe(0)
+  })
+
+  it('ťukání do telefonu nespustí zpěv ani body', () => {
+    const engine = new ScoreEngine(180)
+    const state = feedPattern(engine, 30, (t) => {
+      const tap = t % 0.25 < 0.1
+      return { rms: tap ? 0.18 : 0.001, f0: null }
+    })
+
+    expect(state.singing).toBe(false)
+    expect(engine.finish().score).toBe(0)
+  })
+
+  it('krátké rány s falešným tónem pořád nebodují', () => {
+    const engine = new ScoreEngine(180)
+    feedPattern(engine, 30, (t) => {
+      const tap = t % 0.3 < 0.1
+      return { rms: tap ? 0.18 : 0.001, f0: tap ? 220 : null }
+    })
+
+    expect(engine.finish().score).toBe(0)
+  })
+
+  it('tichý souvislý zpěv se zřetelným tónem se chytí', () => {
+    const engine = new ScoreEngine(180)
+    feed(engine, 5, { rms: 0.002 })
+    const state = feed(engine, 30, { rms: 0.014, f0: 220 })
+    expect(state.singing).toBe(true)
+    expect(engine.finish().score).toBeGreaterThan(600)
   })
 
   it('stabilní tón dává víc než jekot', () => {

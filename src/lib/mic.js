@@ -9,7 +9,7 @@ export async function requestMic() {
   stream = await navigator.mediaDevices.getUserMedia({
     // echoCancellation MUSÍ být vypnuté: s ním prohlížeč (hlavně iOS) zapne
     // „hovorový" režim a ztlumuje přehrávanou hudbu, když se zpívá.
-    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: true },
   })
   return stream
 }
@@ -31,9 +31,14 @@ export function startAnalysis(onFrame) {
   if (audioContext.state === 'suspended') audioContext.resume()
 
   const source = audioContext.createMediaStreamSource(stream)
+  const highpass = audioContext.createBiquadFilter()
+  highpass.type = 'highpass'
+  highpass.frequency.value = 75
+  highpass.Q.value = 0.7
   const analyser = audioContext.createAnalyser()
   analyser.fftSize = 2048
-  source.connect(analyser)
+  source.connect(highpass)
+  highpass.connect(analyser)
 
   const buffer = new Float32Array(analyser.fftSize)
   let running = true
@@ -56,6 +61,7 @@ export function startAnalysis(onFrame) {
   return () => {
     running = false
     clearTimeout(timer)
+    highpass.disconnect()
     source.disconnect()
   }
 }
@@ -71,7 +77,7 @@ function computeRms(buffer) {
 export function detectPitch(buffer, sampleRate) {
   const size = buffer.length
   const rms = computeRms(buffer)
-  if (rms < 0.01) return null
+  if (rms < 0.006) return null
 
   const minLag = Math.floor(sampleRate / 1000)
   const maxLag = Math.floor(sampleRate / 70)
@@ -93,7 +99,7 @@ export function detectPitch(buffer, sampleRate) {
   // normalizace: korelace vůči energii signálu — slabá shoda = žádný tón
   let energy = 0
   for (let i = 0; i < size; i += 2) energy += buffer[i] * buffer[i]
-  if (energy === 0 || bestCorrelation / energy < 0.3) return null
+  if (energy === 0 || bestCorrelation / energy < 0.26) return null
 
   return sampleRate / bestLag
 }

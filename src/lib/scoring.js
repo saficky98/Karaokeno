@@ -6,8 +6,12 @@
 //  (c) energie — hlasitost normalizovaná vůči průměru daného hráče,
 //      takže tichý zpěvák není znevýhodněný proti tomu, kdo řve.
 
-const ABSOLUTE_FLOOR = 0.012 // pod tímto RMS je vždy ticho
+const ABSOLUTE_FLOOR = 0.006 // pod tímto RMS je vždy ticho
 const MAX_SCORE = 10000
+const TRANSIENT_MIN_RMS = 0.035
+const TRANSIENT_COOLDOWN = 0.18
+const PITCHED_ONSET = 0.09
+const UNPITCHED_ONSET = 0.35
 
 export class ScoreEngine {
   constructor(durationSec = 180) {
@@ -20,6 +24,10 @@ export class ScoreEngine {
     this.singTime = 0
     this.stability = 0.5 // EMA stability tónu (0–1)
     this.lastCents = null
+    this.lastRms = 0
+    this.voiceHold = 0
+    this.voiceConfidence = 0
+    this.transientCooldown = 0
   }
 
   setDuration(durationSec) {
@@ -30,6 +38,7 @@ export class ScoreEngine {
   // frame: { rms, f0 (Hz nebo null), dt (sekundy) }
   update({ rms, f0, dt }) {
     this.totalTime += dt
+    const hasPitch = Number.isFinite(f0) && f0 > 0
 
     // Pozadí NENÍ ticho — na párty hraje z reproduktorů samotná písnička.
     // Hladinu pozadí sledujeme jako pomalé minimum: dolů rychle (nádechy,
@@ -41,7 +50,7 @@ export class ScoreEngine {
     } else {
       // se zřetelným tónem (zpěvák) stoupá jen nepatrně — jinak by práh
       // při dlouhé sloce bez nádechu dohnal zpěváka a body by přestaly
-      const rise = f0 ? 1.0001 : 1.004
+      const rise = hasPitch ? 1.0001 : 1.004
       this.noiseFloor = Math.min(this.noiseFloor * rise + 0.00003, rms)
     }
 
@@ -51,10 +60,42 @@ export class ScoreEngine {
     if (this.voicedFrames > 100) {
       threshold = Math.min(threshold, Math.max(ABSOLUTE_FLOOR, this.voicedAvg * 0.75))
     }
-    const singing = rms > threshold
+    const loud = rms > threshold
+    const fromQuiet = this.lastRms < threshold * 0.8 && rms > Math.max(TRANSIENT_MIN_RMS, threshold * 2.2)
+    const hardSpike = rms > Math.max(TRANSIENT_MIN_RMS, this.lastRms * 2.8, threshold * 2.2)
+    const transient = loud && (fromQuiet || hardSpike)
+
+    if (transient) {
+      this.transientCooldown = Math.max(this.transientCooldown, TRANSIENT_COOLDOWN)
+    } else {
+      this.transientCooldown = Math.max(0, this.transientCooldown - dt)
+    }
+
+    // Zpěv je souvislý signál. Krátká rána do telefonu může být hlasitá,
+    // ale po náběhu rychle zmizí, proto po ní chvíli nebodujeme.
+    const overThreshold = threshold > 0 ? rms / threshold : 0
+    const strongUnpitched = loud && rms > Math.max(threshold * 1.8, threshold + 0.018)
+    const voiceLike = loud && !transient && this.transientCooldown <= 0 && (hasPitch || strongUnpitched)
+
+    if (voiceLike) {
+      this.voiceHold += dt
+      const target = hasPitch ? 1 : Math.min(0.7, this.voiceHold / 0.75)
+      const speed = hasPitch ? 0.55 : 0.2
+      this.voiceConfidence += (target - this.voiceConfidence) * speed
+    } else {
+      this.voiceHold = loud && !transient ? Math.max(0, this.voiceHold - dt * 2) : 0
+      this.voiceConfidence *= loud ? 0.65 : 0.35
+    }
+
+    const singing =
+      loud &&
+      overThreshold > (hasPitch ? 1.02 : 1.35) &&
+      this.voiceHold >= (hasPitch ? PITCHED_ONSET : UNPITCHED_ONSET) &&
+      this.voiceConfidence >= (hasPitch ? 0.35 : 0.4)
 
     if (!singing) {
       this.lastCents = null
+      this.lastRms = rms
       return { score: Math.round(this.score), singing: false, level: this.level(rms) }
     }
 
@@ -82,6 +123,7 @@ export class ScoreEngine {
     const potential = (dt / this.duration) * MAX_SCORE
     this.score = Math.min(MAX_SCORE, this.score + potential * quality * 1.05)
 
+    this.lastRms = rms
     return { score: Math.round(this.score), singing: true, level: this.level(rms) }
   }
 
