@@ -18,11 +18,24 @@ describe('romanize', () => {
     expect(romanize('ありがとう')).toBe('arigatou')
   })
 
-  it('u japonštiny s kanji neukazuje zavádějící čínské čtení', () => {
-    expect(romanize('愛してる')).toBe('')
+  it('u japonštiny s kanji přepíše kanu a kanji nechá beze změny (žádná čínština)', () => {
+    expect(romanize('愛してる')).toBe('愛shiteru')
   })
 
   it('rozpozná další nelatinková písma pro přepis', () => {
     expect(needsTransliteration('বাংলা தமிழ் తెలుగు')).toBe(true)
+  })
+
+  it('rozpozná dévanágarí (hindštinu)', () => {
+    expect(needsTransliteration('मेरा दिल')).toBe(true)
+    expect(romanize('मेरा दिल').length).toBeGreaterThan(0)
+  })
+
+  it('přepisuje předmětovou částici את jako „et"', () => {
+    expect(romanize('את')).toBe('et')
+  })
+
+  it('najde slovníkové slovo i s vokalizací (niqqud)', () => {
+    expect(romanize('שָׁלוֹם')).toBe('shalom')
   })
 })

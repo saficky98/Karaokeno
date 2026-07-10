@@ -4,7 +4,7 @@ import { transliterate } from 'transliteration'
 // vynecháváme — publikum appky ji čte. U hebrejštiny a arabštiny máme
 // vlastní přepis (viz níže), ostatní písma zvládá knihovna transliteration.
 const FOREIGN_SCRIPTS =
-  /[\u0370-\u03ff\u1f00-\u1fff\u0590-\u05ff\u0600-\u06ff\u0750-\u077f\u0980-\u09ff\u0a00-\u0a7f\u0a80-\u0aff\u0b80-\u0bff\u0c00-\u0c7f\u0c80-\u0cff\u0d00-\u0d7f\u0d80-\u0dff\u0e00-\u0e7f\u0e80-\u0eff\u1000-\u109f\u10a0-\u10ff\u1200-\u137f\u1780-\u17ff\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af\u1100-\u11ff]/u
+  /[\u0370-\u03ff\u1f00-\u1fff\u0590-\u05ff\u0600-\u06ff\u0750-\u077f\u0900-\u097f\u0980-\u09ff\u0a00-\u0a7f\u0a80-\u0aff\u0b00-\u0b7f\u0b80-\u0bff\u0c00-\u0c7f\u0c80-\u0cff\u0d00-\u0d7f\u0d80-\u0dff\u0e00-\u0e7f\u0e80-\u0eff\u1000-\u109f\u10a0-\u10ff\u1200-\u137f\u1780-\u17ff\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af\u1100-\u11ff]/u
 
 const HEBREW_RE = /[\u0590-\u05ff]/
 const ARABIC_RE = /[\u0600-\u06ff\u0750-\u077f]/
@@ -45,11 +45,13 @@ const isLatinUnit = (unit) => /^[a-z]+$/.test(unit ?? '')
 const HEB_COMMON = {
   'לא': 'lo', 'לי': 'li', 'לך': 'lecha', 'לו': 'lo', 'לה': 'la',
   'של': 'shel', 'שלי': 'sheli', 'שלך': 'shelcha', 'כל': 'kol', 'אל': 'el',
+  // Pozn.: את je ve písních skoro vždy předmětová částice „et" — tvar „at"
+  // („ty", ž.) je vzácnější, deterministický slovník musí zvolit častější.
   'על': 'al', 'עם': 'im', 'אם': 'im', 'את': 'et', 'זה': 'ze', 'זאת': 'zot',
   'מה': 'ma', 'מי': 'mi', 'הוא': 'hu', 'היא': 'hi', 'יש': 'yesh',
   'אין': 'ein', 'גם': 'gam', 'רק': 'rak', 'עוד': 'od', 'כמו': 'kmo',
   'אבל': 'aval', 'כי': 'ki', 'אז': 'az', 'שם': 'sham', 'פה': 'po',
-  'אני': 'ani', 'אתה': 'ata', 'את': 'at', 'אנחנו': 'anachnu',
+  'אני': 'ani', 'אתה': 'ata', 'אנחנו': 'anachnu',
   'אתם': 'atem', 'אתן': 'aten', 'אותי': 'oti', 'אותך': 'otcha',
   'אותו': 'oto', 'אותה': 'ota', 'אותנו': 'otanu', 'כולם': 'kulam',
   'הכל': 'hakol', 'היום': 'hayom', 'הלילה': 'halayla', 'לילה': 'layla',
@@ -68,9 +70,13 @@ const HEB_COMMON = {
 }
 
 function hebrewWordToLatin(word) {
-  // interpunkci kolem slova zachováme, jádro zkusíme najít ve slovníku
+  // interpunkci kolem slova zachováme, jádro zkusíme najít ve slovníku;
+  // klíč slovníku je bez vokalizace (niqqud/kantilace), aby vokalizovaný
+  // text pořád trefil slovníková slova — tečky šin/sin ale necháváme,
+  // protože mění souhlásku (סׂ ≠ שׁ) a slovo s nimi má číst engine
   const core = word.replace(/[^֐-׿]/gu, '')
-  const known = HEB_COMMON[core]
+  const bare = core.replace(/[֑-ֽֿ׀׃-ׇ]/g, '')
+  const known = HEB_COMMON[bare]
   if (known) return word.replace(core, known)
   return hebrewLetters(word)
 }
@@ -93,6 +99,8 @@ function hebrewLetters(word) {
     }
     if (ch === 'ו') {
       if (chars[i + 1] === 'ו') { units.push('v'); i++; continue } // וו = souhláska v
+      if (chars[i + 1] === 'ֹ' || chars[i + 1] === 'ֺ') { units.push('o'); i++; continue } // holam
+      if (chars[i + 1] === 'ּ') { units.push('u'); i++; continue } // šuruk
       // uvnitř slova po souhlásce = samohláska „o", jinak souhláska „v"
       if (i > 0 && !isVowelEnd(units[units.length - 1])) units.push('o')
       else units.push('v')
@@ -345,9 +353,10 @@ export function romanize(text) {
   } else if (ARABIC_RE.test(key)) {
     out = arabicToLatin(key)
   } else if (KANA_RE.test(key)) {
-    // Japonština s kanji potřebuje znalost čtení konkrétních znaků. Knihovna
-    // by je četla čínsky, proto tady raději neukazujeme zavádějící přepis.
-    out = HAN_RE.test(key) ? '' : kanaToLatin(key)
+    // Japonština: kanu přepíšeme rovnou, kanji necháme projít beze změny —
+    // knihovna by je četla čínsky, což je pro japonskou píseň zavádějící.
+    // Správné čtení kanji doplní server (/api/romanize) přes warmRomanizeCache.
+    out = kanaToLatin(key)
   } else if (GREEK_RE.test(key)) {
     out = greekToLatin(key)
   } else {
@@ -356,7 +365,7 @@ export function romanize(text) {
   }
   out = out.replace(/\s+/g, ' ').trim()
 
-  if (cache.size > 800) cache.clear()
+  if (cache.size > 2000) cache.clear()
   cache.set(key, out)
   return out
 }

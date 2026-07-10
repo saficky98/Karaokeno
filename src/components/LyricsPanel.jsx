@@ -33,6 +33,10 @@ const SCRIPT_LANGS = {
   'عرب': ['ar'],
   'ΑΒΓ': ['el'],
   '한글': ['ko'],
+  // かな = text obsahuje kanu → jistě japonština; 漢字 bez kany může být
+  // i čínština, japonštinu zkusíme první (u LRCLIB textů je častější)
+  'かな': ['ja'],
+  '漢字': ['ja', 'zh'],
 }
 
 function preferredCaptionLang(lyrics) {
