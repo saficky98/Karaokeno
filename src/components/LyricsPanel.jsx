@@ -33,6 +33,10 @@ const SCRIPT_LANGS = {
   'عرب': ['ar'],
   'ΑΒΓ': ['el'],
   '한글': ['ko'],
+  // かな = text obsahuje kanu → jistě japonština; 漢字 bez kany může být
+  // i čínština, japonštinu zkusíme první (u LRCLIB textů je častější)
+  'かな': ['ja'],
+  '漢字': ['ja', 'zh'],
 }
 
 function preferredCaptionLang(lyrics) {
@@ -53,7 +57,9 @@ function captionsMatchLyrics(caps, lyrics) {
 // 3. dohledání v LRCLIB z názvu videa, kanálu a přesné délky.
 // ± posun řeší zbylé odchylky a pamatuje se k použitému zdroji textu.
 // onResolved(id|null) hlásí rodiči, jaký text se nakonec používá.
-export default function LyricsPanel({ videoId, lyricsId, playerApiRef, onClose, onResolved }) {
+// onLyricsData(lines|null) předává rodiči synchronizované řádky — skórování
+// podle nich pozná, kdy se má zpívat (řádek textu) a kdy je mezihra.
+export default function LyricsPanel({ videoId, lyricsId, playerApiRef, onClose, onResolved, onLyricsData }) {
   const { t } = useLang()
   const [lyrics, setLyrics] = useState(null)
   const [state, setState] = useState('loading') // loading | ready | empty | hidden
@@ -78,6 +84,7 @@ export default function LyricsPanel({ videoId, lyricsId, playerApiRef, onClose, 
       setOffset(loadOffset(found.id))
       setState('ready')
       onResolved?.(found.id)
+      onLyricsData?.(found.synced?.length ? found.synced : null)
     }
 
     function captionLyrics(caps) {
@@ -95,6 +102,7 @@ export default function LyricsPanel({ videoId, lyricsId, playerApiRef, onClose, 
       if (cancelled) return
       setState('notfound')
       onResolved?.(null)
+      onLyricsData?.(null)
       retimer = setTimeout(() => setState('hidden'), 6000)
     }
 

@@ -8,6 +8,7 @@ import tailwindcss from '@tailwindcss/vite'
 function serverApi() {
   const routes = {
     '/api/captions': () => import('./api/captions.js'),
+    '/api/romanize': () => import('./api/romanize.js'),
     '/api/search': () => import('./api/search.js'),
   }
   const attach = (server) => {

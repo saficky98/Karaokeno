@@ -1,10 +1,11 @@
 import { transliterate } from 'transliteration'
+import { KOREAN_RE, koreanToLatin } from './romanizeKorean.js'
 
 // Písma, u kterých ukazujeme přepis výslovnosti latinkou. Cyrilici
 // vynecháváme — publikum appky ji čte. U hebrejštiny a arabštiny máme
 // vlastní přepis (viz níže), ostatní písma zvládá knihovna transliteration.
 const FOREIGN_SCRIPTS =
-  /[\u0370-\u03ff\u1f00-\u1fff\u0590-\u05ff\u0600-\u06ff\u0750-\u077f\u0980-\u09ff\u0a00-\u0a7f\u0a80-\u0aff\u0b80-\u0bff\u0c00-\u0c7f\u0c80-\u0cff\u0d00-\u0d7f\u0d80-\u0dff\u0e00-\u0e7f\u0e80-\u0eff\u1000-\u109f\u10a0-\u10ff\u1200-\u137f\u1780-\u17ff\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af\u1100-\u11ff]/u
+  /[\u0370-\u03ff\u1f00-\u1fff\u0590-\u05ff\u0600-\u06ff\u0750-\u077f\u0900-\u097f\u0980-\u09ff\u0a00-\u0a7f\u0a80-\u0aff\u0b00-\u0b7f\u0b80-\u0bff\u0c00-\u0c7f\u0c80-\u0cff\u0d00-\u0d7f\u0d80-\u0dff\u0e00-\u0e7f\u0e80-\u0eff\u1000-\u109f\u10a0-\u10ff\u1200-\u137f\u1780-\u17ff\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af\u1100-\u11ff]/u
 
 const HEBREW_RE = /[\u0590-\u05ff]/
 const ARABIC_RE = /[\u0600-\u06ff\u0750-\u077f]/
@@ -45,11 +46,13 @@ const isLatinUnit = (unit) => /^[a-z]+$/.test(unit ?? '')
 const HEB_COMMON = {
   'לא': 'lo', 'לי': 'li', 'לך': 'lecha', 'לו': 'lo', 'לה': 'la',
   'של': 'shel', 'שלי': 'sheli', 'שלך': 'shelcha', 'כל': 'kol', 'אל': 'el',
+  // Pozn.: את je ve písních skoro vždy předmětová částice „et" — tvar „at"
+  // („ty", ž.) je vzácnější, deterministický slovník musí zvolit častější.
   'על': 'al', 'עם': 'im', 'אם': 'im', 'את': 'et', 'זה': 'ze', 'זאת': 'zot',
   'מה': 'ma', 'מי': 'mi', 'הוא': 'hu', 'היא': 'hi', 'יש': 'yesh',
   'אין': 'ein', 'גם': 'gam', 'רק': 'rak', 'עוד': 'od', 'כמו': 'kmo',
   'אבל': 'aval', 'כי': 'ki', 'אז': 'az', 'שם': 'sham', 'פה': 'po',
-  'אני': 'ani', 'אתה': 'ata', 'את': 'at', 'אנחנו': 'anachnu',
+  'אני': 'ani', 'אתה': 'ata', 'אנחנו': 'anachnu',
   'אתם': 'atem', 'אתן': 'aten', 'אותי': 'oti', 'אותך': 'otcha',
   'אותו': 'oto', 'אותה': 'ota', 'אותנו': 'otanu', 'כולם': 'kulam',
   'הכל': 'hakol', 'היום': 'hayom', 'הלילה': 'halayla', 'לילה': 'layla',
@@ -65,12 +68,60 @@ const HEB_COMMON = {
   'מאוד': 'meod', 'טוב': 'tov', 'טובה': 'tova', 'יפה': 'yafe',
   'אור': 'or', 'חושך': 'choshech', 'ילד': 'yeled', 'ילדה': 'yalda',
   'מלך': 'melech', 'מלכה': 'malka',
+  // — rozšíření: nejčastější slova z písňových textů, kde heuristika
+  //   nemá šanci trefit správné samohlásky —
+  'שלו': 'shelo', 'שלה': 'shela', 'שלנו': 'shelanu', 'שלכם': 'shelachem',
+  'שלהם': 'shelahem', 'לנו': 'lanu', 'לכם': 'lachem', 'להם': 'lahem',
+  'בי': 'bi', 'בך': 'becha', 'בו': 'bo', 'בה': 'ba', 'בנו': 'banu',
+  'אותם': 'otam', 'אותן': 'otan',
+  'איך': 'eich', 'איפה': 'eifo', 'למה': 'lama', 'מתי': 'matai',
+  'כמה': 'kama', 'ככה': 'kacha', 'אולי': 'ulai', 'אפשר': 'efshar',
+  'רוצים': 'rotsim', 'צריכה': 'tsricha', 'יודע': 'yodea', 'יודעת': 'yodaat',
+  'חושב': 'choshev', 'חושבת': 'choshevet', 'מרגיש': 'margish', 'מרגישה': 'margisha',
+  'הזה': 'haze', 'הזאת': 'hazot', 'האלה': 'haele', 'שוב': 'shuv',
+  'פעם': 'paam', 'פתאום': 'pitom', 'לבד': 'levad', 'יחד': 'yachad',
+  'ביחד': 'beyachad', 'קצת': 'ktsat', 'הרבה': 'harbe', 'יותר': 'yoter',
+  'פחות': 'pachot', 'הכי': 'hachi', 'ממש': 'mamash', 'באמת': 'beemet',
+  'אמת': 'emet', 'כבר': 'kvar', 'עדיין': 'adayin',
+  'שמש': 'shemesh', 'ירח': 'yareach', 'כוכב': 'kochav', 'כוכבים': 'kochavim',
+  'ארץ': 'erets', 'עיר': 'ir', 'רחוב': 'rechov', 'מקום': 'makom',
+  'זמן': 'zman', 'רגע': 'rega', 'שנה': 'shana', 'שנים': 'shanim',
+  'מילים': 'milim', 'מילה': 'mila', 'סיפור': 'sipur', 'סוף': 'sof',
+  'התחלה': 'hatchala', 'דבר': 'davar', 'דברים': 'dvarim',
+  'ידיים': 'yadayim', 'יד': 'yad', 'גוף': 'guf', 'פנים': 'panim',
+  'חיוך': 'chiyuch', 'שפתיים': 'sfatayim',
+  'ילדים': 'yeladim', 'אישה': 'isha', 'איש': 'ish', 'אנשים': 'anashim',
+  'חבר': 'chaver', 'חברה': 'chavera',
+  'בוקר': 'boker', 'ערב': 'erev', 'שבת': 'shabat',
+  'מוזיקה': 'muzika', 'לרקוד': 'lirkod', 'לשיר': 'lashir',
+  'לחיות': 'lichyot', 'לאהוב': 'leehov',
+  'תן': 'ten', 'תני': 'tni', 'קח': 'kach', 'תגיד': 'tagid', 'תגידי': 'tagidi',
+  'עליי': 'alai', 'עליך': 'alecha', 'עלייך': 'alayich', 'עליו': 'alav',
+  'עליה': 'aleha', 'אליי': 'elai', 'אליך': 'elecha', 'אליו': 'elav',
+  'איתי': 'iti', 'איתך': 'itcha', 'איתו': 'ito', 'איתה': 'ita',
+  'גדול': 'gadol', 'גדולה': 'gdola', 'קטן': 'katan', 'קטנה': 'ktana',
+  'חדש': 'chadash', 'חדשה': 'chadasha',
+  'תודה': 'toda', 'בבקשה': 'bevakasha', 'סליחה': 'slicha',
+  'אלוהים': 'elohim', 'מלאך': 'malach',
+  'אש': 'esh', 'מים': 'mayim', 'אדמה': 'adama', 'פרח': 'perach',
+  'פרחים': 'prachim', 'גשם': 'geshem', 'חורף': 'choref', 'קיץ': 'kayits',
+  'אביב': 'aviv',
+  'לבן': 'lavan', 'שחור': 'shachor', 'כחול': 'kachol', 'אדום': 'adom',
+  'אחד': 'echad', 'אחת': 'achat', 'שניים': 'shnayim', 'שתיים': 'shtayim',
+  'ראשון': 'rishon', 'אחרון': 'acharon', 'אחרונה': 'achrona',
+  'הביתה': 'habayta', 'בבית': 'babayit', 'בלב': 'balev', 'בלילה': 'balayla',
+  'ביום': 'bayom', 'בעולם': 'baolam', 'העולם': 'haolam', 'החיים': 'hachayim',
+  'הלב': 'halev', 'האהבה': 'haahava', 'השמיים': 'hashamayim', 'העיניים': 'haeinayim',
 }
 
 function hebrewWordToLatin(word) {
-  // interpunkci kolem slova zachováme, jádro zkusíme najít ve slovníku
+  // interpunkci kolem slova zachováme, jádro zkusíme najít ve slovníku;
+  // klíč slovníku je bez vokalizace (niqqud/kantilace), aby vokalizovaný
+  // text pořád trefil slovníková slova — tečky šin/sin ale necháváme,
+  // protože mění souhlásku (סׂ ≠ שׁ) a slovo s nimi má číst engine
   const core = word.replace(/[^֐-׿]/gu, '')
-  const known = HEB_COMMON[core]
+  const bare = core.replace(/[֑-ֽֿ׀׃-ׇ]/g, '')
+  const known = HEB_COMMON[bare]
   if (known) return word.replace(core, known)
   return hebrewLetters(word)
 }
@@ -93,6 +144,8 @@ function hebrewLetters(word) {
     }
     if (ch === 'ו') {
       if (chars[i + 1] === 'ו') { units.push('v'); i++; continue } // וו = souhláska v
+      if (chars[i + 1] === 'ֹ' || chars[i + 1] === 'ֺ') { units.push('o'); i++; continue } // holam
+      if (chars[i + 1] === 'ּ') { units.push('u'); i++; continue } // šuruk
       // uvnitř slova po souhlásce = samohláska „o", jinak souhláska „v"
       if (i > 0 && !isVowelEnd(units[units.length - 1])) units.push('o')
       else units.push('v')
@@ -178,6 +231,24 @@ const AR_COMMON = {
   'بحبك': 'bahibbak', 'احبك': 'ahibbak', 'أحبك': 'ahibbak',
   'كمان': 'kaman', 'مرة': 'marra', 'بعد': 'baad', 'قبل': 'qabl',
   'اليوم': 'alyom', 'بكرة': 'bukra', 'تعال': 'taal', 'تعالي': 'taali',
+  // — rozšíření: častá slova z arabských písní —
+  'الله': 'allah', 'والله': 'wallah', 'يلا': 'yalla',
+  'حياتي': 'hayati', 'حياة': 'hayat', 'عمر': 'omr',
+  'انتي': 'inti', 'أنتي': 'inti', 'هم': 'hum',
+  'ليه': 'leh', 'ليش': 'lesh', 'شو': 'shu', 'مين': 'min', 'وين': 'wen',
+  'كيف': 'kif', 'متى': 'mata', 'هنا': 'huna', 'هناك': 'hunak',
+  'عشق': 'ishq', 'غرام': 'gharam', 'شوق': 'shoq',
+  'كتير': 'ktir', 'كثير': 'kathir', 'شوية': 'shwaya', 'خلاص': 'khalas',
+  'يعني': 'yaani', 'بس': 'bas', 'لازم': 'lazem', 'ممكن': 'mumkin', 'مش': 'mish',
+  'معايا': 'maaya', 'معاك': 'maak', 'معاكي': 'maaki',
+  'قلب': 'qalb', 'قمر': 'qamar', 'القمر': 'alqamar', 'شمس': 'shams',
+  'الشمس': 'ashshams', 'نجوم': 'nujum', 'سما': 'sama', 'سماء': 'samaa',
+  'بحر': 'bahr', 'الدنيا': 'addunya', 'روح': 'ruh', 'الروح': 'arruh',
+  'سنة': 'sana', 'يوم': 'yom', 'ليالي': 'layali', 'صباح': 'sabah', 'مساء': 'masaa',
+  'اغنية': 'ughniya', 'كلام': 'kalam', 'كلمة': 'kalima', 'صوت': 'sot',
+  'موسيقى': 'musiqa',
+  'جميل': 'jamil', 'جميلة': 'jamila', 'حلو': 'helw', 'حلوة': 'helwa',
+  'غالي': 'ghali', 'قريب': 'qarib', 'بعيد': 'baid', 'الليلة': 'allayla',
 }
 
 function arabicWordToLatin(word) {
@@ -188,10 +259,19 @@ function arabicWordToLatin(word) {
   return arabicLetters(word)
 }
 
+// „Sluneční" písmena: člen ال se před nimi asimiluje (الشمس → ash-shams).
+const AR_SUN = 'تثدذرزسشصضطظلن'
+
 function arabicLetters(word) {
   const chars = [...word]
   const units = []
-  for (let i = 0; i < chars.length; i++) {
+  let start = 0
+  if (chars[0] === 'ا' && chars[1] === 'ل' && AR_SUN.includes(chars[2] ?? '')) {
+    const sun = AR_LETTERS[chars[2]] ?? chars[2]
+    units.push('a', sun + sun) // zdvojení jako jeden celek, ať mezi ně nevleze „a"
+    start = 3
+  }
+  for (let i = start; i < chars.length; i++) {
     const ch = chars[i]
     if (ch === 'ـ') continue
     if (AR_DIACRITICS[ch]) {
@@ -325,8 +405,52 @@ function kanaToLatin(text) {
   return out
 }
 
+// ---------- řečtina ----------
+// Moderní (novořecká) výslovnost — knihovna transliteration přepisuje
+// antickou (η→e, υ→y, digrafy nechává), což je pro dnešní písně špatně.
+
+const GR_SINGLE = {
+  'α': 'a', 'β': 'v', 'γ': 'g', 'δ': 'd', 'ε': 'e', 'ζ': 'z', 'η': 'i',
+  'θ': 'th', 'ι': 'i', 'κ': 'k', 'λ': 'l', 'μ': 'm', 'ν': 'n', 'ξ': 'x',
+  'ο': 'o', 'π': 'p', 'ρ': 'r', 'σ': 's', 'ς': 's', 'τ': 't', 'υ': 'i',
+  'φ': 'f', 'χ': 'h', 'ψ': 'ps', 'ω': 'o',
+}
+const GR_LETTER = /[α-ως]/
+const GR_VOICED = /[αεηιουωβγδζλμνρ]/ // αυ/ευ zní av/ev před znělou, af/ef před neznělou
+
 function greekToLatin(text) {
-  return transliterate(text).replace(/oy/gi, (m) => (m[0] === 'O' ? 'U' : 'u'))
+  // přízvuky/dýchání pro výslovnost nehrají roli — pryč s nimi (NFD),
+  // velká písmena v přepisu pro zpěv nepotřebujeme
+  const s = text.normalize('NFD').replace(/[̀-ͯͅ]/g, '').toLowerCase()
+  const chars = [...s]
+  let out = ''
+  for (let i = 0; i < chars.length; i++) {
+    const a = chars[i]
+    const b = chars[i + 1] ?? ''
+    const pair = a + b
+    const atStart = i === 0 || !GR_LETTER.test(chars[i - 1] ?? '')
+    if (pair === 'ου') { out += 'u'; i++; continue }
+    if (pair === 'αι') { out += 'e'; i++; continue }
+    if (pair === 'ει' || pair === 'οι' || pair === 'υι') { out += 'i'; i++; continue }
+    if (pair === 'αυ' || pair === 'ευ' || pair === 'ηυ') {
+      const base = pair === 'αυ' ? 'a' : pair === 'ευ' ? 'e' : 'i'
+      const c = chars[i + 2] ?? ''
+      out += base + (GR_VOICED.test(c) ? 'v' : 'f')
+      i++
+      continue
+    }
+    if (pair === 'μπ') { out += atStart ? 'b' : 'mb'; i++; continue }
+    if (pair === 'ντ') { out += atStart ? 'd' : 'nd'; i++; continue }
+    if (pair === 'γκ') { out += atStart ? 'g' : 'ng'; i++; continue }
+    if (pair === 'γγ') { out += 'ng'; i++; continue }
+    if (pair === 'τζ') { out += 'dz'; i++; continue }
+    if (a === 'γ' && ('εηιυ'.includes(b) || ((b === 'α' || b === 'ο') && chars[i + 2] === 'ι'))) {
+      out += 'y' // γ před předními samohláskami měkne (για → ya)
+      continue
+    }
+    out += GR_SINGLE[a] ?? a
+  }
+  return out
 }
 
 // ---------- veřejné API ----------
@@ -345,18 +469,55 @@ export function romanize(text) {
   } else if (ARABIC_RE.test(key)) {
     out = arabicToLatin(key)
   } else if (KANA_RE.test(key)) {
-    // Japonština s kanji potřebuje znalost čtení konkrétních znaků. Knihovna
-    // by je četla čínsky, proto tady raději neukazujeme zavádějící přepis.
-    out = HAN_RE.test(key) ? '' : kanaToLatin(key)
+    // Japonština: kanu přepíšeme rovnou, kanji necháme projít beze změny —
+    // knihovna by je četla čínsky, což je pro japonskou píseň zavádějící.
+    // Správné čtení kanji doplní server (/api/romanize) přes warmRomanizeCache.
+    out = kanaToLatin(key)
   } else if (GREEK_RE.test(key)) {
     out = greekToLatin(key)
+  } else if (KOREAN_RE.test(key)) {
+    out = koreanToLatin(key)
   } else {
     // knihovna u některých písem vkládá technické značky — pro čtení je vyhodíme
     out = transliterate(key).replace(/[`@ʾʿ]/g, '')
   }
   out = out.replace(/\s+/g, ' ').trim()
 
-  if (cache.size > 800) cache.clear()
+  if (cache.size > 2000) cache.clear()
   cache.set(key, out)
   return out
+}
+
+// ---------- serverové doladění japonštiny ----------
+// Čtení kanji závisí na kontextu — to zvládne jen slovníkový analyzátor na
+// serveru (/api/romanize). Výsledky se zapíšou rovnou do cache, takže další
+// volání romanize() už vrací správné rómadži. Bez serveru (statický hosting,
+// offline) se nic neděje — zůstane lokální přepis kany s kanji beze změny.
+const warmedLines = new Set()
+
+export async function warmRomanizeCache(lines) {
+  if (!Array.isArray(lines) || lines.length === 0) return
+  const texts = lines.filter((line) => typeof line === 'string')
+  // bez jediné kany nejde o japonštinu (čínštinu na ja-server neposílat)
+  if (!texts.some((line) => KANA_RE.test(line))) return
+  const targets = [...new Set(texts.filter((line) => HAN_RE.test(line) && !warmedLines.has(line)))]
+    .slice(0, 200)
+  if (targets.length === 0) return
+  targets.forEach((line) => warmedLines.add(line))
+  try {
+    const res = await fetch('/api/romanize', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ lang: 'ja', lines: targets }),
+    })
+    if (!res.ok) return
+    const data = await res.json()
+    data?.lines?.forEach((romaji, i) => {
+      if (typeof romaji === 'string' && romaji.trim()) {
+        cache.set(targets[i], romaji.replace(/\s+/g, ' ').trim())
+      }
+    })
+  } catch {
+    // server nedostupný — tichý fallback na lokální přepis
+  }
 }

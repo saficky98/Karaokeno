@@ -5,6 +5,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import captionsHandler from './api/captions.js'
+import romanizeHandler from './api/romanize.js'
 import searchHandler from './api/search.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -13,6 +14,7 @@ const port = Number(process.env.PORT || 4173)
 
 const apiRoutes = {
   '/api/captions': captionsHandler,
+  '/api/romanize': romanizeHandler,
   '/api/search': searchHandler,
 }
 
