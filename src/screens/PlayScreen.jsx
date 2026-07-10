@@ -64,6 +64,8 @@ function CountUpScore({ value }) {
 export default function PlayScreen({
   nowPlaying,
   nextItem,
+  roomActive = false, // běží sdílená místnost
+  remoteLive = null, // {playerId: {score, level, singing, key, seq}} — skóre z telefonů
   micConsent, // null = ještě jsme se neptali, 'on' = povoleno, 'off' = bez skórování
   onMicConsent,
   onNext,
@@ -99,6 +101,13 @@ export default function PlayScreen({
   const lyricsLinesRef = useRef(null)
 
   const scoringActive = micConsent === 'on' && !micFailed
+  // Zpěvák s telefonem (host místnosti): zpívá do SVÉHO mikrofonu, skóre
+  // chodí po síti — mikrofon tohohle zařízení (u reproduktorů) mlčí.
+  const remoteSinger = roomActive && Boolean(nowPlaying?.singer?.guestId)
+  const remoteTick =
+    remoteSinger && remoteLive?.[nowPlaying.singerId]?.key === nowPlaying.key
+      ? remoteLive[nowPlaying.singerId]
+      : null
 
   // Úklid analýzy při odchodu z obrazovky / výměně písničky
   useEffect(() => {
@@ -156,8 +165,9 @@ export default function PlayScreen({
     )
   }
 
-  // Před první písničkou se slušně zeptáme na mikrofon.
-  if (micConsent === null) {
+  // Před první písničkou se slušně zeptáme na mikrofon. Když zpívá host
+  // do svého telefonu, mikrofon tohohle zařízení není potřeba — neptáme se.
+  if (micConsent === null && !remoteSinger) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-5 p-6 text-center">
         <span className="flex h-16 w-16 items-center justify-center rounded-full bg-neon-pink/10 text-neon-pink">
@@ -233,6 +243,7 @@ export default function PlayScreen({
   }
 
   async function startScoring() {
+    if (remoteSinger) return // skóre přijde z telefonu zpěváka
     if (micConsent !== 'on') return
     engineRef.current = new ScoreEngine(playerDuration() || 180)
     syncScoringDuration()
@@ -311,6 +322,10 @@ export default function PlayScreen({
       outcome = { score: final.score }
       engineRef.current = null
       onSongFinished?.({ score: final.score, singerId: singer?.id ?? null, title })
+    } else if (remoteTick) {
+      // orientační výsledek z posledního ticku telefonu; oficiální skóre
+      // zapíše App z „finished" zprávy hosta
+      outcome = { score: remoteTick.score }
     }
     setResult(outcome)
     setEnded(true)
@@ -473,8 +488,12 @@ export default function PlayScreen({
             </div>
           </div>
 
-          {live && playerError === null && (
-            <LiveScoreHUD score={live.score} level={live.level} singing={live.singing} />
+          {(live || remoteTick) && playerError === null && (
+            <LiveScoreHUD
+              score={(live ?? remoteTick).score}
+              level={(live ?? remoteTick).level ?? 0}
+              singing={Boolean((live ?? remoteTick).singing)}
+            />
           )}
 
           {needsUnmute && playerError === null && !counting && (

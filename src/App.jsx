@@ -9,6 +9,7 @@ import { loadState, saveState, clearState } from './lib/storage.js'
 import { absorbKeyFromUrl, getApiKey } from './lib/youtubeApi.js'
 import { LangProvider, translate } from './lib/i18n.jsx'
 import { absorbRoomFromUrl, storedGuestRoom, clearGuestRoom } from './lib/roomLink.js'
+import { mergeGuest, acceptGuestScore, isFresherScore } from './lib/roomProtocol.js'
 
 // Obrazovka hosta (a MQTT knihovna) se stahuje jen, když je potřeba.
 const GuestApp = lazy(() => import('./screens/GuestApp.jsx'))
@@ -96,15 +97,30 @@ function HostApp() {
   const [room, setRoom] = useState(saved?.room ?? null)
   const [roomStatus, setRoomStatus] = useState('connecting')
   const [usedGuestSongs, setUsedGuestSongs] = useState(saved?.usedGuestSongs ?? [])
+  // „Náhrobky" vyhozených hostů — retained zpráva hosta je jinak vzkřísí.
+  const [kickedGuests, setKickedGuests] = useState(saved?.kickedGuests ?? [])
+  // Už zapsaná skóre z telefonů (`${playKey}:${playerId}`) — idempotence.
+  const [recordedGuestScores, setRecordedGuestScores] = useState(saved?.recordedGuestScores ?? [])
+  // Poslední živé ticky skóre zpívajících hostů: {playerId: tick}.
+  const [remoteLive, setRemoteLive] = useState({})
   const roomApiRef = useRef(null)
-  const progressRef = useRef(0)
-  const [progressTick, setProgressTick] = useState(0)
   const usedGuestSongsRef = useRef(usedGuestSongs)
   usedGuestSongsRef.current = usedGuestSongs
+  const kickedGuestsRef = useRef(kickedGuests)
+  kickedGuestsRef.current = kickedGuests
+  const recordedGuestScoresRef = useRef(recordedGuestScores)
+  recordedGuestScoresRef.current = recordedGuestScores
+  const nowPlayingRef = useRef(nowPlaying)
+  nowPlayingRef.current = nowPlaying
+  // Nedávná přehrání (playKey → {title}) — k nim se smí zapsat skóre z telefonu.
+  const playsRef = useRef(new Map())
 
   useEffect(() => {
-    saveState({ players, queue, nowPlaying, results, micConsent, lang, room, usedGuestSongs })
-  }, [players, queue, nowPlaying, results, micConsent, lang, room, usedGuestSongs])
+    saveState({
+      players, queue, nowPlaying, results, micConsent, lang, room, usedGuestSongs,
+      kickedGuests, recordedGuestScores,
+    })
+  }, [players, queue, nowPlaying, results, micConsent, lang, room, usedGuestSongs, kickedGuests, recordedGuestScores])
 
   // Připojení místnosti (hostitel): posloucháme příspěvky hostů.
   useEffect(() => {
@@ -118,6 +134,7 @@ function HostApp() {
           secret: room.secret,
           role: 'host',
           onGuest: applyGuestUpdate,
+          onScore: applyGuestScoreTick,
           onStatus: setRoomStatus,
         })
       } catch {
@@ -139,49 +156,59 @@ function HostApp() {
   }, [room?.id])
 
   // Hostitel po každé změně publikuje zašifrovaný snímek místnosti.
+  // Pozice přehrávání tudy NEteče — má vlastní lehký kanál (publishPos),
+  // takže se fotky hráčů (base64) neposílají znovu každých pár sekund.
   useEffect(() => {
     if (!room) return
     roomApiRef.current?.publishRoom({
+      v: 2,
       players: players.map((p) => ({ ...p, songs: undefined, songsCount: p.songs.length })),
       queue,
       results,
+      kicked: kickedGuests,
       nowPlaying: nowPlaying
         ? {
+            key: nowPlaying.key ?? null,
             title: nowPlaying.title,
             singerId: nowPlaying.singerId,
             videoId: nowPlaying.videoId ?? null,
             lyricsId: nowPlaying.lyricsId ?? null,
-            pos: progressRef.current,
           }
         : null,
       apiKey: getApiKey(),
     })
-  }, [players, queue, results, nowPlaying, room, roomStatus, progressTick])
+  }, [players, queue, results, nowPlaying, room, roomStatus, kickedGuests])
 
-  // Příspěvek hosta: jeho profil + písničky se stanou hráčem s playlistem.
+  // Příspěvek hosta: jeho profil + písničky se stanou hráčem s playlistem;
+  // finální skóre nazpívané na telefonu se zapíše do výsledků.
   function applyGuestUpdate(guestId, data) {
-    const id = `g-${guestId}`
-    setPlayers((list) => {
-      if (!data?.player?.name) return list.filter((p) => p.id !== id)
-      const used = new Set(usedGuestSongsRef.current)
-      const merged = {
-        id,
-        guestId,
-        name: data.player.name,
-        avatar: data.player.avatar ?? '🎤',
-        color: data.player.color ?? '#38cdec',
-        photo: data.player.photo ?? null,
-        songs: (data.songs ?? [])
-          .map((s) => ({ id: `${id}-${s.id}`, videoId: s.videoId, title: s.title ?? null, lyricsId: s.lyricsId ?? null }))
-          .filter((s) => !used.has(s.id)),
-      }
-      const index = list.findIndex((p) => p.id === id)
-      if (index >= 0) {
-        const copy = [...list]
-        copy[index] = merged
-        return copy
-      }
-      return [...list, merged]
+    if (kickedGuestsRef.current.includes(guestId)) {
+      // vyhozený host se přihlásil znovu — smazat jeho retained zprávu
+      if (data) roomApiRef.current?.clearGuest(guestId)
+      setPlayers((list) => list.filter((p) => p.id !== `g-${guestId}`))
+      return
+    }
+    setPlayers((list) => mergeGuest(list, guestId, data, usedGuestSongsRef.current, kickedGuestsRef.current))
+    const accepted = acceptGuestScore({
+      finished: data?.finished,
+      guestId,
+      plays: playsRef.current,
+      recorded: new Set(recordedGuestScoresRef.current),
+    })
+    if (accepted) {
+      setRecordedGuestScores((list) => [...list, accepted.recordKey])
+      setResults((list) => [...list, { id: nextId++, ...accepted.result }])
+    }
+  }
+
+  // Živé skóre zpívajících hostů — poslední čerstvý tick na hráče.
+  function applyGuestScoreTick(guestId, tick) {
+    const currentKey = nowPlayingRef.current?.key
+    if (!currentKey || tick?.key !== currentKey) return
+    const playerId = `g-${guestId}`
+    setRemoteLive((map) => {
+      if (!isFresherScore(map[playerId], tick)) return map
+      return { ...map, [playerId]: tick }
     })
   }
 
@@ -195,6 +222,8 @@ function HostApp() {
   function createRoom() {
     import('./lib/roomCrypto.js').then(({ generateRoomId, generateRoomSecret }) => {
       setRoomStatus('connecting')
+      setKickedGuests([])
+      setRecordedGuestScores([])
       setRoom({ id: generateRoomId(), secret: generateRoomSecret() })
     })
   }
@@ -283,6 +312,12 @@ function HostApp() {
   }
 
   function removePlayer(id) {
+    // host: náhrobek + smazání jeho retained zprávy, jinak by ho vzkřísila
+    const player = players.find((p) => p.id === id)
+    if (player?.guestId) {
+      setKickedGuests((list) => (list.includes(player.guestId) ? list : [...list, player.guestId]))
+      roomApiRef.current?.clearGuest(player.guestId)
+    }
     setPlayers((list) => list.filter((p) => p.id !== id))
     setQueue((list) => list.filter((s) => s.singerId !== id))
   }
@@ -306,6 +341,17 @@ function HostApp() {
     })
   }
 
+  // Každé přehrání má unikátní klíč — telefony k němu vážou nazpívaná skóre.
+  function registerPlay(title) {
+    const key = `p${nextId++}`
+    playsRef.current.set(key, { title: title ?? null })
+    if (playsRef.current.size > 20) {
+      playsRef.current.delete(playsRef.current.keys().next().value)
+    }
+    setRemoteLive({})
+    return key
+  }
+
   // Бере першу пісню з черги і запускає її.
   function playNext() {
     const [next, ...rest] = queue
@@ -314,14 +360,20 @@ function HostApp() {
       setScreen('play')
       return
     }
-    setNowPlaying({ videoId: next.videoId, title: next.title, singerId: next.singerId, lyricsId: next.lyricsId ?? null })
+    setNowPlaying({
+      videoId: next.videoId,
+      title: next.title,
+      singerId: next.singerId,
+      lyricsId: next.lyricsId ?? null,
+      key: registerPlay(next.title),
+    })
     setQueue(rest)
     setScreen('play')
   }
 
   // Швидке відтворення за посиланням, без гравця і черги.
   function playDirect(videoId) {
-    setNowPlaying({ videoId, title: null, singerId: null, lyricsId: null })
+    setNowPlaying({ videoId, title: null, singerId: null, lyricsId: null, key: registerPlay(null) })
     setScreen('play')
   }
 
@@ -396,6 +448,8 @@ function HostApp() {
           <PlayScreen
             nowPlaying={withSinger(nowPlaying)}
             nextItem={withSinger(queue[0] ?? null)}
+            roomActive={Boolean(room)}
+            remoteLive={remoteLive}
             micConsent={micConsent}
             onMicConsent={setMicConsent}
             onNext={playNext}
@@ -403,9 +457,16 @@ function HostApp() {
             onPlayDirect={playDirect}
             onGoHome={() => setScreen('home')}
             onSongFinished={recordResult}
-            onProgress={(sec) => {
-              progressRef.current = sec
-              if (room) setProgressTick((x) => x + 1)
+            onProgress={(sec, dur) => {
+              // lehký efemérní kanál — snímek místnosti (s fotkami) se kvůli
+              // pozici přehrávání znovu neposílá
+              if (room) {
+                roomApiRef.current?.publishPos({
+                  pos: sec,
+                  dur: dur || 0,
+                  key: nowPlaying?.key ?? null,
+                })
+              }
             }}
             onLyricsDiscovered={(id) =>
               setNowPlaying((prev) => (prev ? { ...prev, lyricsId: id } : prev))
