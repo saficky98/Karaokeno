@@ -38,4 +38,21 @@ describe('romanize', () => {
   it('najde slovníkové slovo i s vokalizací (niqqud)', () => {
     expect(romanize('שָׁלוֹם')).toBe('shalom')
   })
+
+  it('řečtinu přepisuje novořeckou výslovností', () => {
+    expect(romanize('μπορεί')).toBe('bori')
+    expect(romanize('ουρανός')).toBe('uranos')
+    expect(romanize('παιδιά')).toBe('pedia')
+    expect(romanize('ευχαριστώ')).toBe('efharisto')
+    expect(romanize('αγάπη')).toBe('agapi')
+  })
+
+  it('korejštinu přepisuje s výslovnostními pravidly', () => {
+    expect(romanize('사랑해요')).toBe('saranghaeyo')
+    expect(romanize('감사합니다')).toBe('gamsahamnida')
+  })
+
+  it('arabský člen se před slunečními písmeny asimiluje', () => {
+    expect(romanize('النور')).toBe('annur')
+  })
 })
