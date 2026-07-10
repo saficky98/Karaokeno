@@ -6,7 +6,7 @@
 //  (c) energie — hlasitost normalizovaná vůči průměru daného hráče,
 //      takže tichý zpěvák není znevýhodněný proti tomu, kdo řve.
 
-const ABSOLUTE_FLOOR = 0.006 // pod tímto RMS je vždy ticho
+const ABSOLUTE_FLOOR = 0.003 // pod tímto RMS je vždy ticho (mic.js signál normalizuje)
 const MAX_SCORE = 10000
 const TRANSIENT_MIN_RMS = 0.035
 const TRANSIENT_COOLDOWN = 0.18
