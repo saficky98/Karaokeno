@@ -11,14 +11,21 @@ zábavné skóre (0–10 000) a vede žebříček. Rozhraní je v ukrajinštině
 - 🎬 Přehrávání YouTube videí (vyhledáváním i vložením odkazu)
 - 🧑‍🤝‍🧑 2–8 hráčů s avatary, automatické střídání u mikrofonu
 - 📋 Společná fronta písniček + osobní playlist každého hráče
-- 🎙 Fun score z mikrofonu: čas zpěvu, stabilita tónu, energie —
-  normalizované férově vůči hlasitosti daného hráče
+- 🎙 Fun score z mikrofonu: čas zpěvu v řádcích textu, melodičnost,
+  stabilita tónu, energie — normalizované férově vůči hlasitosti hráče;
+  pískání a monotónní bzučení dostanou míň než skutečný zpěv
 - 🏆 Výsledky s vtipnými komentáři, konfetami a průběžným žebříčkem
 - 🔤 Synchronizovaný text písně a přepis výslovnosti pro cizí písma
+  (hebrejština, arabština, řečtina, korejština, japonština — kanji čte
+  server přes `/api/romanize`)
+- 📺 Sdílená místnost přes jeden odkaz/QR: PC nebo TV se stane
+  **obrazovkou** (video + text + živé skóre), hráči se přidají telefonem,
+  vytvoří si postavu, přidají písničky a **zpívají do mikrofonu svého
+  telefonu** — skóre se počítá v telefonu a šifrovaně letí do místnosti
 - 💾 Vše se ukládá v prohlížeči — obnovení stránky o nic nepřipraví
 
 Zvuk z mikrofonu se **nikam neposílá ani nenahrává** — analýza běží jen
-v prohlížeči (Web Audio API).
+v prohlížeči (Web Audio API); do místnosti se posílají jen čísla skóre.
 
 ## Spuštění pro vývojáře
 

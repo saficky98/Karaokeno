@@ -20,6 +20,7 @@ import {
   X,
 } from 'lucide-react'
 import { buildRoomLink } from '../lib/roomLink.js'
+import QrCode from '../components/QrCode.jsx'
 import { parseYouTubeId } from '../lib/youtube.js'
 import VideoLinkForm from '../components/VideoLinkForm.jsx'
 import Avatar from '../components/Avatar.jsx'
@@ -172,6 +173,9 @@ function RoomPanel({ room, roomStatus, guestCount, onCreateRoom, onCloseRoom }) 
             {copied ? <Check size={15} strokeWidth={2.2} /> : <Copy size={15} strokeWidth={1.8} />}
             {copied ? t('copied') : t('copy')}
           </button>
+        </div>
+        <div className="mt-3 flex justify-center">
+          <QrCode value={link} size={132} />
         </div>
       </div>
       <p className="text-xs text-white/45">{t('room_guests', { n: guestCount })}</p>
