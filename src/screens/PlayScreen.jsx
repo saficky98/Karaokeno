@@ -7,6 +7,7 @@ import LiveScoreHUD from '../components/LiveScoreHUD.jsx'
 import Avatar from '../components/Avatar.jsx'
 import { requestMic, hasMic, startAnalysis } from '../lib/mic.js'
 import { ScoreEngine } from '../lib/scoring.js'
+import { isLineActive } from '../lib/lyricTiming.js'
 import { useLang, commentKey } from '../lib/i18n.jsx'
 
 // Panel s textem (a knihovna přepisu písma) se stahuje až při prvním otevření.
@@ -93,12 +94,16 @@ export default function PlayScreen({
   const stopRef = useRef(null)
   const playerApiRef = useRef(null)
   const durationTimerRef = useRef(null)
+  // Synchronizované řádky textu — přežívají zavření panelu textu, skórování
+  // podle nich pozná řádky vs. mezihry.
+  const lyricsLinesRef = useRef(null)
 
   const scoringActive = micConsent === 'on' && !micFailed
 
   // Úklid analýzy při odchodu z obrazovky / výměně písničky
   useEffect(() => {
     setLyricsAvailable(null)
+    lyricsLinesRef.current = null
     return () => {
       clearTimeout(durationTimerRef.current)
       durationTimerRef.current = null
@@ -106,13 +111,15 @@ export default function PlayScreen({
     }
   }, [nowPlaying?.videoId])
 
-  // Pozice přehrávání pro hosty v místnosti (každých 5 s)
+  // Pozice přehrávání pro hosty v místnosti (každé 2 s) + pojistka: jakmile
+  // přehrávač zná skutečnou délku, předá se enginu skóre.
   useEffect(() => {
     if (!nowPlaying) return
     const timer = setInterval(() => {
       const sec = playerApiRef.current?.getCurrentTime?.() ?? 0
-      if (sec > 0) onProgress?.(sec)
-    }, 5000)
+      if (sec > 0) onProgress?.(sec, playerApiRef.current?.getDuration?.() ?? 0)
+      engineRef.current?.setDuration(playerApiRef.current?.getDuration?.() ?? 0)
+    }, 2000)
     return () => clearInterval(timer)
   }, [nowPlaying?.videoId])
 
@@ -198,7 +205,11 @@ export default function PlayScreen({
     }
     stopRef.current?.()
     stopRef.current = startAnalysis((frame) => {
-      const state = engineRef.current?.update(frame)
+      const lines = lyricsLinesRef.current
+      const active = lines
+        ? isLineActive(lines, playerApiRef.current?.getCurrentTime?.() ?? 0)
+        : undefined
+      const state = engineRef.current?.update({ ...frame, active })
       if (state) setLive(state)
     })
   }
@@ -382,6 +393,9 @@ export default function PlayScreen({
               // do stavu ukládáme jen LRCLIB id (číslo) — titulky videa
               // (yt:…) si každé zařízení načte samo podle videoId
               if (typeof id === 'number' && id !== nowPlaying.lyricsId) onLyricsDiscovered?.(id)
+            }}
+            onLyricsData={(lines) => {
+              lyricsLinesRef.current = Array.isArray(lines) && lines.length ? lines : null
             }}
           />
         </Suspense>

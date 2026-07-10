@@ -110,4 +110,44 @@ describe('ScoreEngine', () => {
     feed(engine, 180, { rms: 0.12, f0: 220 })
     expect(engine.finish().score).toBeLessThan(6500)
   })
+
+  // melodie: fráze střídající 4 tóny s plynulými přechody
+  const melodicF0 = (t) => [220, 262, 330, 392][Math.floor(t / 2) % 4]
+
+  it('pískání (čistá sinusoida vysoko ve spektru) dává výrazně míň než zpěv melodie', () => {
+    const whistle = new ScoreEngine(120)
+    feedPattern(whistle, 60, () => ({ rms: 0.12, f0: 1200, flatness: 0.02, highRatio: 0.95 }))
+
+    const singing = new ScoreEngine(120)
+    feedPattern(singing, 60, (t) => ({ rms: 0.12, f0: melodicF0(t), flatness: 0.35, highRatio: 0.15 }))
+
+    expect(whistle.finish().score).toBeLessThan(singing.finish().score * 0.5)
+  })
+
+  it('melodie dává víc než monotónní bzučení', () => {
+    const melodic = new ScoreEngine(120)
+    feedPattern(melodic, 60, (t) => ({ rms: 0.12, f0: melodicF0(t) }))
+
+    const monotone = new ScoreEngine(120)
+    feed(monotone, 60, { rms: 0.12, f0: 220 })
+
+    expect(melodic.finish().score).toBeGreaterThan(monotone.finish().score * 1.05)
+  })
+
+  it('zpěv mimo řádky textu (mezihra) dává výrazně míň než zpěv v řádcích', () => {
+    const inLines = new ScoreEngine(120)
+    feedPattern(inLines, 60, (t) => ({ rms: 0.12, f0: melodicF0(t), active: true }))
+
+    const inBreaks = new ScoreEngine(120)
+    feedPattern(inBreaks, 60, (t) => ({ rms: 0.12, f0: melodicF0(t), active: false }))
+
+    expect(inBreaks.finish().score).toBeLessThan(inLines.finish().score * 0.5)
+  })
+
+  it('bez údajů o textu a spektru se chová neutrálně (zpětná kompatibilita)', () => {
+    const engine = new ScoreEngine(120)
+    const state = feed(engine, 60, { rms: 0.12, f0: 220 })
+    expect(state.singing).toBe(true)
+    expect(engine.finish().score).toBeGreaterThan(2000)
+  })
 })
