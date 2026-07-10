@@ -487,3 +487,37 @@ export function romanize(text) {
   cache.set(key, out)
   return out
 }
+
+// ---------- serverové doladění japonštiny ----------
+// Čtení kanji závisí na kontextu — to zvládne jen slovníkový analyzátor na
+// serveru (/api/romanize). Výsledky se zapíšou rovnou do cache, takže další
+// volání romanize() už vrací správné rómadži. Bez serveru (statický hosting,
+// offline) se nic neděje — zůstane lokální přepis kany s kanji beze změny.
+const warmedLines = new Set()
+
+export async function warmRomanizeCache(lines) {
+  if (!Array.isArray(lines) || lines.length === 0) return
+  const texts = lines.filter((line) => typeof line === 'string')
+  // bez jediné kany nejde o japonštinu (čínštinu na ja-server neposílat)
+  if (!texts.some((line) => KANA_RE.test(line))) return
+  const targets = [...new Set(texts.filter((line) => HAN_RE.test(line) && !warmedLines.has(line)))]
+    .slice(0, 200)
+  if (targets.length === 0) return
+  targets.forEach((line) => warmedLines.add(line))
+  try {
+    const res = await fetch('/api/romanize', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ lang: 'ja', lines: targets }),
+    })
+    if (!res.ok) return
+    const data = await res.json()
+    data?.lines?.forEach((romaji, i) => {
+      if (typeof romaji === 'string' && romaji.trim()) {
+        cache.set(targets[i], romaji.replace(/\s+/g, ' ').trim())
+      }
+    })
+  } catch {
+    // server nedostupný — tichý fallback na lokální přepis
+  }
+}

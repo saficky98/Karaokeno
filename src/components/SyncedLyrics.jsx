@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { needsTransliteration, romanize } from '../lib/romanize.js'
+import { needsTransliteration, romanize, warmRomanizeCache } from '../lib/romanize.js'
 import { clamp01, lineWindow, songRate } from '../lib/lyricTiming.js'
 
 // Karaoke zobrazení synchronizovaného textu:
@@ -99,6 +99,12 @@ export default function SyncedLyrics({ lines, getTime, size = 'lg' }) {
   const now = useSmoothTime(getTime)
   const S = SIZES[size] ?? SIZES.lg
   const rate = useMemo(() => songRate(lines), [lines])
+
+  // U japonštiny s kanji si dopředu vyžádáme správné čtení ze serveru —
+  // zapíše se do cache romanize(), překreslení běží stejně každý snímek.
+  useEffect(() => {
+    warmRomanizeCache(lines.map((line) => line.text))
+  }, [lines])
 
   let index = -1
   for (let i = 0; i < lines.length; i++) {
